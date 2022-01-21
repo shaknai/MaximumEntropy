@@ -14,13 +14,13 @@ class NeuronGroup:
 
     def ProbOfState(self,state):
         if isinstance(state,int):
-            state = self.numToBitsArray(state)
+            state = self.NumToBitsArray(state)
         return np.e ** (- self.beta * self.HamiltonianOfState(state)) / self.Z
 
     def HamiltonianOfState(self, state):
         return (state @ self.H) + (state @ self.J @ state)
 
-    def numToBitsArray(self,num):
+    def NumToBitsArray(self,num):
         amountOfBits = self.amountOfNeurons
         bits = np.array([])
         while num != 0 and amountOfBits > 0:
@@ -32,4 +32,11 @@ class NeuronGroup:
         if amountOfBits > 0:
             bits = np.concatenate([np.zeros(amountOfBits),bits],axis = 0)
         return bits
+    
+    def MonteCarlo(self,amountOfResults):
+        states = [self.NumToBitsArray(stateNum) for stateNum in range(2 ** self.numOfNeurons)]
+        probOfStates = [self.ProbOfState(state) for state in states]
+        return np.random.choice(states,amountOfResults,p=probOfStates)
+    
+     
 
