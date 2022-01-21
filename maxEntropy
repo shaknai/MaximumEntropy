@@ -14,17 +14,22 @@ class NeuronGroup:
 
     def ProbOfState(self,state):
         if isinstance(state,int):
-            state = numToTenBitsArray(state)
+            state = self.numToBitsArray(state)
         return np.e ** (- self.beta * self.HamiltonianOfState(state)) / self.Z
 
     def HamiltonianOfState(self, state):
         return (state @ self.H) + (state @ self.J @ state)
 
-def numToTenBitsArray(num):
-    lsb = np.unpackbits(np.array([num & (2 ** 8 - 1)],dtype=np.uint8))
-    msb = np.unpackbits(np.array([(num >> 8) & (2 ** 2 - 1)],dtype=np.uint8),count=2)
-    return np.concatenate([msb,lsb],axis=0)
-
-group = NeuronGroup(10)
-
+    def numToBitsArray(self,num):
+        amountOfBits = self.amountOfNeurons
+        bits = np.array([])
+        while num != 0 and amountOfBits > 0:
+            newBits = np.unpackbits(np.array([num & (2 ** min(8,amountOfBits) - 1)],dtype=np.uint8))
+            newBits = newBits[-min(8,amountOfBits):]
+            bits = np.concatenate([newBits,bits],axis=0)
+            num = num >> 8
+            amountOfBits -= 8
+        if amountOfBits > 0:
+            bits = np.concatenate([np.zeros(amountOfBits),bits],axis = 0)
+        return bits
 
