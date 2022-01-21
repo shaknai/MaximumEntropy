@@ -1,0 +1,30 @@
+import numpy as np
+class NeuronGroup:
+    def __init__(self,numOfNeurons):
+        self.beta = 1
+        self.numOfNeurons = numOfNeurons
+        self.J = np.random.randn(numOfNeurons,numOfNeurons)
+        np.fill_diagonal(self.J,0)
+        self.H = np.random.randn(numOfNeurons)
+        self.Z = self.PartitionFunction()
+
+    def PartitionFunction(self):
+        self.Z = 1
+        return sum([self.ProbOfState(state) for state in range(2 ** self.numOfNeurons)])
+
+    def ProbOfState(self,state):
+        if isinstance(state,int):
+            state = numToTenBitsArray(state)
+        return np.e ** (- self.beta * self.HamiltonianOfState(state)) / self.Z
+
+    def HamiltonianOfState(self, state):
+        return (state @ self.H) + (state @ self.J @ state)
+
+def numToTenBitsArray(num):
+    lsb = np.unpackbits(np.array([num & (2 ** 8 - 1)],dtype=np.uint8))
+    msb = np.unpackbits(np.array([(num >> 8) & (2 ** 2 - 1)],dtype=np.uint8),count=2)
+    return np.concatenate([msb,lsb],axis=0)
+
+group = NeuronGroup(10)
+
+
