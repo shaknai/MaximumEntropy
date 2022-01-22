@@ -1,14 +1,17 @@
-from turtle import title
 import numpy as np
 from matplotlib import pyplot as plt
+from functools import lru_cache
+
 class NeuronGroup:
     def __init__(self,numOfNeurons):
         self.beta = 1
         self.numOfNeurons = numOfNeurons
         self.J = np.random.randn(numOfNeurons,numOfNeurons)
+        # self.J = np.zeros((numOfNeurons,numOfNeurons))
+        # self.J[5][3] = 5
         np.fill_diagonal(self.J,0)
-        # self.H = np.random.randn(numOfNeurons)
-        self.H = np.zeros(numOfNeurons)
+        self.H = np.random.randn(numOfNeurons)
+        # self.H = np.zeros(numOfNeurons)
         self.Z = self.PartitionFunction()
 
     def PartitionFunction(self):
@@ -40,29 +43,40 @@ class NeuronGroup:
         states = range(2 ** self.numOfNeurons)
         probOfStates = [self.ProbOfState(state) for state in states]
         choices = np.random.choice(states,amountOfResults,p=probOfStates)
-        return np.array([self.NumToBitsArray(choice) for choice in choices])
+        return np.array([2*(self.NumToBitsArray(choice)-0.5) for choice in choices])
     
 def ExpectationOfNeurons(states):
     return np.sum(states,axis=0)/states.shape[0]
 
+
 def ExpectationOfPairs(states):
-    movedStates = (states - 0.5) * 2 #Moved from 0 or 1 to -1 or 1
-    #movedStates.shape = (numStates,numOfNeurons)
-    return np.einsum('ij,ik->jk',movedStates,movedStates) / movedStates.shape[0]
+    return np.einsum('ij,ik->jk',states,states) / states.shape[0]
+
+
+def MutualInformationPairs(pairsExpectations, neuronsExpectations):
+    return pairsExpectations - np.einsum('i,j -> ij',neuronsExpectations,neuronsExpectations)
+
 group = NeuronGroup(10)
-states = group.MonteCarlo(100000)
-plt.subplot(2,2,1)
+states = group.MonteCarlo(10000)
+neuronsExpectations = ExpectationOfNeurons(states)
+pairsExpectations = ExpectationOfPairs(states)
+mutInformation = MutualInformationPairs(pairsExpectations, neuronsExpectations)
+plt.subplot(3,2,1)
 plt.imshow(np.reshape(group.H,(1,group.numOfNeurons)))
 plt.title('H')
-plt.subplot(2,2,2)
+plt.subplot(3,2,2)
 plt.imshow(group.J)
 plt.title('J')
-plt.subplot(2,2,3)
-plt.imshow(np.reshape(ExpectationOfNeurons(states),(1,group.numOfNeurons)))
+plt.subplot(3,2,3)
+plt.imshow(np.reshape(neuronsExpectations,(1,group.numOfNeurons)))
 plt.title('Expectation of Neurons')
-plt.subplot(2,2,4)
-plt.imshow(ExpectationOfPairs(states))
+plt.subplot(3,2,4)
+plt.imshow(pairsExpectations)
 plt.title('Expectation of Pairs')
+plt.subplot(3,2,6)
+plt.imshow(mutInformation)
+plt.title('Mutual information of pairs')
 
-plt.show(title='Bla')
+
+plt.show()
 
