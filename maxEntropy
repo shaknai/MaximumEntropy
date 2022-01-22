@@ -1,11 +1,14 @@
+from turtle import title
 import numpy as np
+from matplotlib import pyplot as plt
 class NeuronGroup:
     def __init__(self,numOfNeurons):
         self.beta = 1
         self.numOfNeurons = numOfNeurons
         self.J = np.random.randn(numOfNeurons,numOfNeurons)
         np.fill_diagonal(self.J,0)
-        self.H = np.random.randn(numOfNeurons)
+        # self.H = np.random.randn(numOfNeurons)
+        self.H = np.zeros(numOfNeurons)
         self.Z = self.PartitionFunction()
 
     def PartitionFunction(self):
@@ -15,13 +18,13 @@ class NeuronGroup:
     def ProbOfState(self,state):
         if isinstance(state,int):
             state = self.NumToBitsArray(state)
-        return np.e ** (- self.beta * self.HamiltonianOfState(state)) / self.Z
+        return np.e ** (self.beta * self.HamiltonianOfState(state)) / self.Z
 
     def HamiltonianOfState(self, state):
         return (state @ self.H) + (state @ self.J @ state)
 
     def NumToBitsArray(self,num):
-        amountOfBits = self.amountOfNeurons
+        amountOfBits = self.numOfNeurons
         bits = np.array([])
         while num != 0 and amountOfBits > 0:
             newBits = np.unpackbits(np.array([num & (2 ** min(8,amountOfBits) - 1)],dtype=np.uint8))
@@ -34,9 +37,32 @@ class NeuronGroup:
         return bits
     
     def MonteCarlo(self,amountOfResults):
-        states = [self.NumToBitsArray(stateNum) for stateNum in range(2 ** self.numOfNeurons)]
+        states = range(2 ** self.numOfNeurons)
         probOfStates = [self.ProbOfState(state) for state in states]
-        return np.random.choice(states,amountOfResults,p=probOfStates)
+        choices = np.random.choice(states,amountOfResults,p=probOfStates)
+        return np.array([self.NumToBitsArray(choice) for choice in choices])
     
-     
+def ExpectationOfNeurons(states):
+    return np.sum(states,axis=0)/states.shape[0]
+
+def ExpectationOfPairs(states):
+    movedStates = (states - 0.5) * 2 #Moved from 0 or 1 to -1 or 1
+    #movedStates.shape = (numStates,numOfNeurons)
+    return np.einsum('ij,ik->jk',movedStates,movedStates) / movedStates.shape[0]
+group = NeuronGroup(10)
+states = group.MonteCarlo(100000)
+plt.subplot(2,2,1)
+plt.imshow(np.reshape(group.H,(1,group.numOfNeurons)))
+plt.title('H')
+plt.subplot(2,2,2)
+plt.imshow(group.J)
+plt.title('J')
+plt.subplot(2,2,3)
+plt.imshow(np.reshape(ExpectationOfNeurons(states),(1,group.numOfNeurons)))
+plt.title('Expectation of Neurons')
+plt.subplot(2,2,4)
+plt.imshow(ExpectationOfPairs(states))
+plt.title('Expectation of Pairs')
+
+plt.show(title='Bla')
 
