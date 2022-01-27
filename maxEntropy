@@ -1,3 +1,4 @@
+from aifc import Error
 import numpy as np
 from matplotlib import pyplot as plt
 from functools import lru_cache
@@ -43,12 +44,12 @@ class NeuronGroup:
         states = range(2 ** self.numOfNeurons)
         probOfStates = [self.ProbOfState(state) for state in states]
         choices = np.random.choice(states,amountOfResults,p=probOfStates)
-        return np.array([2*(self.NumToBitsArray(choice)-0.5) for choice in choices])
+        return np.array([self.NumToBitsArray(choice) for choice in choices])
     
     def ExpectationOfNeuronsFromDist(self):
         expectation = np.zeros(self.numOfNeurons)
         for state in range(2**self.numOfNeurons):
-            bitsArray = (self.NumToBitsArray(state) - 0.5) * 2
+            bitsArray = self.NumToBitsArray(state)
             expectation += bitsArray * self.ProbOfState(state)
         return expectation
 
@@ -57,15 +58,36 @@ class NeuronGroup:
         for state in range(2**self.numOfNeurons):
             bitsArray = (self.NumToBitsArray(state) - 0.5) * 2 
             expectation += np.einsum('i,j->ij',bitsArray,bitsArray) * self.ProbOfState(state)
-        return expectation
+        return expectation / 2 + 0.5
     
+    def UpdateH(self, neuronsExpectations):
+        neuronsExpectationsDist = self.ExpectationOfNeuronsFromDist()
+        self.H += self.lr * np.log((neuronsExpectations + np.finfo(float).eps) / (neuronsExpectationsDist + np.finfo(float).eps))
+        self.Z = self.PartitionFunction()
+    
+    def UpdateJ(self,pairsExpectations):
+        pairsExpectationsDist = self.ExpectationOfPairsFromDist()
+        if np.min((pairsExpectations + np.finfo(float).eps) / (pairsExpectationsDist + np.finfo(float).eps)) <= 0 :
+            raise Error
+        self.J += self.lr * np.log((pairsExpectations + np.finfo(float).eps) / (pairsExpectationsDist + np.finfo(float).eps))
+        self.Z = self.PartitionFunction()
+    
+    def UpdateParameters(self, neuronsExpectations, pairsExpectations,lr):
+        self.lr = lr
+        self.UpdateH(neuronsExpectations)
+        self.UpdateJ(pairsExpectations)
+    
+    def GIS(self,neuronsExpectations, pairsExpectations,amountOfRuns = 500,lr = 0.01):
+        for _ in range(amountOfRuns):
+            self.UpdateParameters(neuronsExpectations,pairsExpectations,lr=lr)
 
 def ExpectationOfNeurons(states):
     return np.sum(states,axis=0)/states.shape[0]
 
 
 def ExpectationOfPairs(states):
-    return np.einsum('ij,ik->jk',states,states) / states.shape[0]
+    movedStates = (states - 0.5) * 2
+    return (np.einsum('ij,ik->jk',movedStates,movedStates)/ states.shape[0]) / 2 + 0.5
 
 
 def MutualInformationPairs(pairsExpectations, neuronsExpectations):
@@ -75,31 +97,52 @@ def MutualInformationPairs(pairsExpectations, neuronsExpectations):
 group = NeuronGroup(10)
 states = group.MonteCarlo(10000)
 neuronsExpectations = ExpectationOfNeurons(states)
-neuronsExpectationsDist = group.ExpectationOfNeuronsFromDist()
 pairsExpectations = ExpectationOfPairs(states)
-pairsExpectationsDist = group.ExpectationOfPairsFromDist()
-mutInformation = MutualInformationPairs(pairsExpectations, neuronsExpectations)
+
+classifier = NeuronGroup(10)
+amountOfRuns = 5000
+lr = 0.05
 plt.subplot(3,2,1)
-plt.imshow(np.reshape(group.H,(1,group.numOfNeurons)))
-plt.title('H')
+plt.plot(classifier.H,group.H,'.')
+plt.title('Classifier initial H')
 plt.subplot(3,2,2)
-plt.imshow(group.J)
-plt.title('J')
+plt.plot(classifier.J,group.J,'.')
+plt.title('Classifier initial J')
+classifier.GIS(neuronsExpectations,pairsExpectations,amountOfRuns=amountOfRuns,lr=lr)
 plt.subplot(3,2,3)
-plt.imshow(np.reshape(neuronsExpectations,(1,group.numOfNeurons)))
-plt.title('Expectation of Neurons')
+plt.plot(classifier.H,group.H,'.')
+plt.title(f'Classifier H after {amountOfRuns} iterations')
 plt.subplot(3,2,4)
-plt.imshow(pairsExpectations)
-plt.title('Expectation of Pairs')
+plt.plot(classifier.J,group.J,'.')
+plt.title(f'Classifier J after {amountOfRuns} iterations')
 plt.subplot(3,2,5)
-# plt.imshow(np.reshape(neuronsExpectationsDist ,(1,group.numOfNeurons)))
-plt.plot(neuronsExpectations,neuronsExpectationsDist,'.')
-plt.title('Expectations of neurons theory vs. practice')
-plt.xlabel('Monte Carlo expectations')
-plt.ylabel('Theorized expectations')
+plt.plot(group.H)
+plt.title('Group H')
 plt.subplot(3,2,6)
-plt.plot(pairsExpectationsDist,pairsExpectations,'.')
-plt.title('Expectations of pairs theory vs. practice')
+plt.plot(group.J)
+plt.title('Group J')
+plt.savefig(f'GIS_after_{amountOfRuns}_iters.png')
+# plt.subplot(3,2,1)
+# plt.imshow(np.reshape(group.H,(1,group.numOfNeurons)))
+# plt.title('H')
+# plt.subplot(3,2,2)
+# plt.imshow(group.J)
+# plt.title('J')
+# plt.subplot(3,2,3)
+# plt.imshow(np.reshape(neuronsExpectations,(1,group.numOfNeurons)))
+# plt.title('Expectation of Neurons')
+# plt.subplot(3,2,4)
+# plt.imshow(pairsExpectations)
+# plt.title('Expectation of Pairs')
+# plt.subplot(3,2,5)
+# # plt.imshow(np.reshape(neuronsExpectationsDist ,(1,group.numOfNeurons)))
+# plt.plot(neuronsExpectations,neuronsExpectationsDist,'.')
+# plt.title('Expectations of neurons theory vs. practice')
+# plt.xlabel('Monte Carlo expectations')
+# plt.ylabel('Theorized expectations')
+# plt.subplot(3,2,6)
+# plt.plot(pairsExpectationsDist,pairsExpectations,'.')
+# plt.title('Expectations of pairs theory vs. practice')
 
 
 plt.show()
