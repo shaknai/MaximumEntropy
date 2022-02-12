@@ -18,6 +18,10 @@ class NeuronGroup:
     def PartitionFunction(self):
         self.Z = 1
         return sum([self.ProbOfState(state) for state in range(2 ** self.numOfNeurons)])
+    
+    def PartitionFunctionMonteCarlo(self,amountOfRuns):
+        self.Z = 1
+        return sum([self.ProbOfState(state) for state in self.MonteCarlo(amountOfRuns)])
 
     def ProbOfState(self,state):
         if isinstance(state,int):
@@ -60,6 +64,21 @@ class NeuronGroup:
             expectation += np.einsum('i,j->ij',bitsArray,bitsArray) * self.ProbOfState(state)
         return expectation / 2 + 0.5
     
+    def ExpectationsFromMonteCarlo(self,amountOfRuns):
+        expectationNeuronsMC = np.zeros(self.numOfNeurons)
+        totalProb = 0
+        expectationPairsMC = np.zeros((self.numOfNeurons,self.numOfNeurons))
+        for state in self.MonteCarlo(amountOfRuns):
+            bitsArray = self.NumToBitsArray(state)
+            probOfState = self.ProbOfState(state)
+            expectationNeuronsMC += bitsArray * probOfState
+            bitsArray = (bitsArray - 0.5) * 2
+            expectationPairsMC += np.einsum('i,j->ij',bitsArray,bitsArray) * probOfState
+            totalProb += probOfState
+        expectationPairsMC = expectationPairsMC / 2 + 0.5
+        return expectationNeuronsMC / totalProb , expectationPairsMC / totalProb
+
+
     def UpdateH(self, neuronsExpectations):
         neuronsExpectationsDist = self.ExpectationOfNeuronsFromDist()
         self.H += self.lr * np.log((neuronsExpectations + np.finfo(float).eps) / (neuronsExpectationsDist + np.finfo(float).eps))
@@ -71,15 +90,29 @@ class NeuronGroup:
             raise Error
         self.J += self.lr * np.log((pairsExpectations + np.finfo(float).eps) / (pairsExpectationsDist + np.finfo(float).eps))
         self.Z = self.PartitionFunction()
-    
+
+    def UpdateHJMonteCarlo(self,neuronsExpectations, pairsExpectations, amountOfRuns):
+        expectationNeuronsMC , expectationPairsMC = self.ExpectationsFromMonteCarlo(amountOfRuns)
+        self.H += self.lr * np.log((neuronsExpectations + np.finfo(float).eps) / (expectationNeuronsMC + np.finfo(float).eps))
+        self.J += self.lr * np.log((pairsExpectations + np.finfo(float).eps) / (expectationPairsMC + np.finfo(float).eps))
+        self.Z = self.PartitionFunctionMonteCarlo(amountOfRuns)
+
     def UpdateParameters(self, neuronsExpectations, pairsExpectations,lr):
         self.lr = lr
         self.UpdateH(neuronsExpectations)
         self.UpdateJ(pairsExpectations)
     
+    def UpdateParametersMonteCarlo(self, neuronsExpectations, pairsExpectations, lr, amountOfRuns):
+        self.lr = lr
+        self.UpdateHJMonteCarlo(neuronsExpectations, pairsExpectations, amountOfRuns)
+    
     def GIS(self,neuronsExpectations, pairsExpectations,amountOfRuns = 500,lr = 0.01):
         for _ in range(amountOfRuns):
             self.UpdateParameters(neuronsExpectations,pairsExpectations,lr=lr)
+    
+    def GradientDescent(self, neuronsExpectations, pairsExpectations,amountOfIters = 500, amountOfRuns = 50,lr = 0.01):
+        for _ in range(amountOfIters):
+            self.UpdateParametersMonteCarlo(neuronsExpectations, pairsExpectations, lr, amountOfRuns)
 
 def ExpectationOfNeurons(states):
     return np.sum(states,axis=0)/states.shape[0]
