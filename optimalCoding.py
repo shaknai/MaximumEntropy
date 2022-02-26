@@ -1,5 +1,7 @@
 from aifc import Error
+from os import stat
 import numpy as np
+from scipy.stats import entropy
 from matplotlib import pyplot as plt
 from functools import lru_cache
 
@@ -27,6 +29,13 @@ class NeuronGroup:
         if isinstance(state,int):
             state = self.NumToBitsArray(state)
         return np.e ** (self.beta * self.HamiltonianOfState(state)) / self.Z
+
+    def ProbOfAllStates(self):
+        res = np.zeros(2**self.numOfNeurons)
+        for state in range(2**self.numOfNeurons):
+            res[state] = self.ProbOfState(state)
+        res /= np.sum(res)
+        return res
 
     def HamiltonianOfState(self, state):
         return (state @ self.H) + (state @ self.J @ state)
@@ -80,7 +89,6 @@ class NeuronGroup:
         expectationPairsMC = expectationPairsMC / 2 + 0.5
         return expectationNeuronsMC , expectationPairsMC
 
-
     def UpdateH(self, neuronsExpectations):
         neuronsExpectationsDist = self.ExpectationOfNeuronsFromDist()
         self.H += self.lr * np.log((neuronsExpectations + np.finfo(float).eps) / (neuronsExpectationsDist + np.finfo(float).eps))
@@ -116,70 +124,69 @@ class NeuronGroup:
         for _ in range(amountOfIters):
             self.UpdateParametersMonteCarlo(neuronsExpectations, pairsExpectations, lr, amountOfRuns)
 
-def ExpectationOfNeurons(states):
-    return np.sum(states,axis=0)/states.shape[0]
-
-
-def ExpectationOfPairs(states):
-    movedStates = (states - 0.5) * 2
-    return (np.einsum('ij,ik->jk',movedStates,movedStates)/ states.shape[0]) / 2 + 0.5
-
-
-def MutualInformationPairs(pairsExpectations, neuronsExpectations):
-    return pairsExpectations - np.einsum('i,j -> ij',neuronsExpectations,neuronsExpectations)
-
+class Inputs:
+    def __init__(self, numNeurons, typeInput = 'binary', covariance = 0):
+        self.numNeurons = numNeurons
+        self.typeInput = typeInput
+        self.covariance = covariance
     
-group = NeuronGroup(10)
-states = group.MonteCarlo(10000)
-neuronsExpectations = ExpectationOfNeurons(states)
-pairsExpectations = ExpectationOfPairs(states)
+    def ProbOfAllInputs(self):
+        if self.typeInput == 'binary':
+            if self.numNeurons == 2:
+                probSame = (1+self.covariance)/4
+                probDiff = (1-self.covariance)/4
+                probs = np.zeros(self.numNeurons**2)
+                for i in range(len(probs)):
+                    
+                    if bin(i)[-1] == bin(i)[-2]:
+                        probs[i] = probSame
+                    else:
+                        probs[i] = probDiff
+            else:
+                raise NotImplementedError
+        else:
+            raise NotImplementedError
+        return probs
 
-classifier = NeuronGroup(10)
-amountOfIters = 10000
-amountOfRuns = 500
-lr = 0.005
-plt.subplot(3,2,1)
-plt.plot(classifier.H,group.H,'.')
-plt.title('Classifier initial H')
-plt.subplot(3,2,2)
-plt.plot(classifier.J,group.J,'.')
-plt.title('Classifier initial J')
-classifier.GradientDescent(neuronsExpectations,pairsExpectations,amountOfRuns=amountOfRuns,lr=lr,amountOfIters=amountOfIters)
-plt.subplot(3,2,3)
-plt.plot(classifier.H,group.H,'.')
-plt.title(f'Classifier H after {amountOfRuns} iterations')
-plt.subplot(3,2,4)
-plt.plot(classifier.J,group.J,'.')
-plt.title(f'Classifier J after {amountOfRuns} iterations')
-plt.subplot(3,2,5)
-plt.plot(group.H)
-plt.title('Group H')
-plt.subplot(3,2,6)
-plt.plot(group.J)
-plt.title('Group J')
-plt.savefig(f'GIS_after_{amountOfRuns}_iters.png')
-# plt.subplot(3,2,1)
-# plt.imshow(np.reshape(group.H,(1,group.numOfNeurons)))
-# plt.title('H')
-# plt.subplot(3,2,2)
-# plt.imshow(group.J)
-# plt.title('J')
-# plt.subplot(3,2,3)
-# plt.imshow(np.reshape(neuronsExpectations,(1,group.numOfNeurons)))
-# plt.title('Expectation of Neurons')
-# plt.subplot(3,2,4)
-# plt.imshow(pairsExpectations)
-# plt.title('Expectation of Pairs')
-# plt.subplot(3,2,5)
-# # plt.imshow(np.reshape(neuronsExpectationsDist ,(1,group.numOfNeurons)))
-# plt.plot(neuronsExpectations,neuronsExpectationsDist,'.')
-# plt.title('Expectations of neurons theory vs. practice')
-# plt.xlabel('Monte Carlo expectations')
-# plt.ylabel('Theorized expectations')
-# plt.subplot(3,2,6)
-# plt.plot(pairsExpectationsDist,pairsExpectations,'.')
-# plt.title('Expectations of pairs theory vs. practice')
+    def InputToH(self,input):
+        bits = [x for x in bin(input)[2:]]
+        H = np.array([0] * (self.numNeurons - len(bits)) + bits,dtype=np.float32)
+        H = (H - 0.5) * 2
+        return H
 
 
-plt.show()
+class NeuronsWithInputs:
+    def __init__(self,numOfNeurons=2,typeInput='binary',covariance=0):
+        self.neuronGroup = NeuronGroup(numOfNeurons)
+        self.inputs = Inputs(numOfNeurons,typeInput,covariance)
+    
+    def ProbOfAllStates(self,J,beta):
+        probOfAllInputs = self.inputs.ProbOfAllInputs()
+        probOfAllStates = np.zeros(2 ** self.neuronGroup.numOfNeurons)
+        self.neuronGroup.J = np.array([[1,J],[J,1]])
+        self.neuronGroup.beta = beta
+        for input,probOfInput in enumerate(probOfAllInputs):
+            self.neuronGroup.H = self.inputs.InputToH(input)
+            probOfStatesForInput = self.neuronGroup.ProbOfAllStates()
+            probOfAllStates += probOfStatesForInput * probOfInput
+        return probOfAllStates
+    
+    def EntropyOfOutputs(self,J):
+        probOfAllStates = self.ProbOfAllStates(J)
+        return entropy(probOfAllStates)
+
+    def ConditionalEntropy(self,J,beta):
+        totalEntropy = 0
+        probOfAllInputs = self.inputs.ProbOfAllInputs()
+        self.neuronGroup.J = np.array([[1,J],[J,1]])
+        self.neuronGroup.beta = beta
+        for input,probOfInput in enumerate(probOfAllInputs):
+            self.neuronGroup.H = self.inputs.InputToH(input)
+            probOfStatesForInput = self.neuronGroup.ProbOfAllStates()
+            totalEntropy += probOfInput * entropy(probOfStatesForInput)
+        return totalEntropy
+    
+neuronsWithInputs = NeuronsWithInputs()
+
+
 
