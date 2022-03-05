@@ -9,18 +9,6 @@ class NeuronGroup:
     def __init__(self,numOfNeurons):
         self.beta = 1
         self.numOfNeurons = numOfNeurons
-        self.J = np.random.randn(numOfNeurons,numOfNeurons)
-        np.fill_diagonal(self.J,0)
-        self.H = np.random.randn(numOfNeurons)
-        self.Z = self.PartitionFunction()
-
-    def PartitionFunction(self):
-        self.Z = 1
-        return sum([self.ProbOfState(state) for state in range(2 ** self.numOfNeurons)])
-    
-    def PartitionFunctionMonteCarlo(self,amountOfRuns):
-        self.Z = 1
-        return sum([self.ProbOfState(self.NumToBitsArray(state)) for state in np.random.choice(range(2**self.numOfNeurons),amountOfRuns)])
 
     def ProbOfState(self,state):
         if isinstance(state,int):
@@ -28,7 +16,7 @@ class NeuronGroup:
         if 0 in state:
             state -= 0.5
             state *= 2
-        return np.e ** (self.beta * self.HamiltonianOfState(state)) / self.Z
+        return np.e ** (self.beta * self.HamiltonianOfState(state))
 
     def ProbOfAllStates(self):
         res = np.zeros(2**self.numOfNeurons)
@@ -52,78 +40,7 @@ class NeuronGroup:
         if amountOfBits > 0:
             bits = np.concatenate([np.zeros(amountOfBits),bits],axis = 0)
         return bits
-    
-    def MonteCarlo(self,amountOfResults):
-        states = range(2 ** self.numOfNeurons)
-        probOfStates = [self.ProbOfState(state) for state in states]
-        choices = np.random.choice(states,amountOfResults,p=probOfStates)
-        return np.array([self.NumToBitsArray(choice) for choice in choices])
-    
-    def ExpectationOfNeuronsFromDist(self):
-        expectation = np.zeros(self.numOfNeurons)
-        for state in range(2**self.numOfNeurons):
-            bitsArray = self.NumToBitsArray(state)
-            expectation += bitsArray * self.ProbOfState(state)
-        return expectation
-
-    def ExpectationOfPairsFromDist(self):
-        expectation = np.zeros((self.numOfNeurons,self.numOfNeurons))
-        for state in range(2**self.numOfNeurons):
-            bitsArray = (self.NumToBitsArray(state) - 0.5) * 2 
-            expectation += np.einsum('i,j->ij',bitsArray,bitsArray) * self.ProbOfState(state)
-        return expectation / 2 + 0.5
-    
-    def ExpectationsFromMonteCarlo(self,amountOfRuns):
-        expectationNeuronsMC = np.zeros(self.numOfNeurons)
-        totalProb = 0
-        expectationPairsMC = np.zeros((self.numOfNeurons,self.numOfNeurons))
-        for bitsArray in np.random.choice(range(2**self.numOfNeurons),amountOfRuns):
-            bitsArray = self.NumToBitsArray(bitsArray)
-            probOfState = self.ProbOfState(bitsArray)
-            expectationNeuronsMC += bitsArray * probOfState
-            bitsArray = (bitsArray - 0.5) * 2
-            expectationPairsMC += np.einsum('i,j->ij',bitsArray,bitsArray) * probOfState
-            totalProb += probOfState
-        expectationNeuronsMC /= totalProb
-        expectationPairsMC /= totalProb
-        expectationPairsMC = expectationPairsMC / 2 + 0.5
-        return expectationNeuronsMC , expectationPairsMC
-
-    def UpdateH(self, neuronsExpectations):
-        neuronsExpectationsDist = self.ExpectationOfNeuronsFromDist()
-        self.H += self.lr * np.log((neuronsExpectations + np.finfo(float).eps) / (neuronsExpectationsDist + np.finfo(float).eps))
-        self.Z = self.PartitionFunction()
-    
-    def UpdateJ(self,pairsExpectations):
-        pairsExpectationsDist = self.ExpectationOfPairsFromDist()
-        if np.min((pairsExpectations + np.finfo(float).eps) / (pairsExpectationsDist + np.finfo(float).eps)) <= 0 :
-            raise Error
-        self.J += self.lr * np.log((pairsExpectations + np.finfo(float).eps) / (pairsExpectationsDist + np.finfo(float).eps))
-        self.Z = self.PartitionFunction()
-
-    def UpdateHJMonteCarlo(self,neuronsExpectations, pairsExpectations, amountOfRuns):
-        expectationNeuronsMC , expectationPairsMC = self.ExpectationsFromMonteCarlo(amountOfRuns)
-        self.H += self.lr * np.log((neuronsExpectations + np.finfo(float).eps) / (expectationNeuronsMC + np.finfo(float).eps))
-        self.J += self.lr * np.log((pairsExpectations + np.finfo(float).eps) / (expectationPairsMC + np.finfo(float).eps))
-        self.Z = self.PartitionFunctionMonteCarlo(amountOfRuns)
-
-    def UpdateParameters(self, neuronsExpectations, pairsExpectations,lr):
-        self.lr = lr
-        self.UpdateH(neuronsExpectations)
-        self.UpdateJ(pairsExpectations)
-    
-    def UpdateParametersMonteCarlo(self, neuronsExpectations, pairsExpectations, lr, amountOfRuns):
-        self.lr = lr
-        self.UpdateHJMonteCarlo(neuronsExpectations, pairsExpectations, amountOfRuns)
-    
-    def GIS(self,neuronsExpectations, pairsExpectations,amountOfRuns = 500,lr = 0.01):
-        for _ in range(amountOfRuns):
-            self.UpdateParameters(neuronsExpectations,pairsExpectations,lr=lr)
-    
-    def GradientDescent(self, neuronsExpectations, pairsExpectations,amountOfIters = 500, amountOfRuns = 50,lr = 0.01):
-        for _ in range(amountOfIters):
-            self.UpdateParametersMonteCarlo(neuronsExpectations, pairsExpectations, lr, amountOfRuns)
-
+   
 class Inputs:
     def __init__(self, numNeurons, typeInput = 'binary', covariance = 0):
         self.numNeurons = numNeurons
@@ -160,11 +77,15 @@ class NeuronsWithInputs:
         self.neuronGroup = NeuronGroup(numOfNeurons)
         self.inputs = Inputs(numOfNeurons,typeInput,covariance)
     
-    def ProbOfAllStates(self,J,beta):
+    def ProbOfAllStates(self,J=None,beta=None,covariance = None):
+        if covariance:
+            self.inputs.covariance = covariance
+        if J:
+            self.neuronGroup.J = np.array([[0,J],[0,0]])
+        if beta:
+            self.neuronGroup.beta = beta
         probOfAllInputs = self.inputs.ProbOfAllInputs()
         probOfAllStates = np.zeros(2 ** self.neuronGroup.numOfNeurons)
-        self.neuronGroup.J = np.array([[0,J],[J,0]])
-        self.neuronGroup.beta = beta
         for input,probOfInput in enumerate(probOfAllInputs):
             self.neuronGroup.H = self.inputs.InputToH(input)
             probOfStatesForInput = self.neuronGroup.ProbOfAllStates()
@@ -172,55 +93,76 @@ class NeuronsWithInputs:
         probOfAllStates /= np.sum(probOfAllStates)
         return probOfAllStates
     
-    def EntropyOfOutputs(self,J,beta):
+    def EntropyOfOutputs(self,J,beta=None,covariance=None):
+        if covariance:
+            self.inputs.covariance = covariance
+        if beta:
+            self.neuronGroup.beta = beta
+        probOfAllInputs = self.inputs.ProbOfAllInputs()
+        self.neuronGroup.J = np.array([[0,J],[0,0]])
+        probOfStates = np.zeros(2**self.neuronGroup.numOfNeurons)
+        for input,probOfInput in enumerate(probOfAllInputs):
+            self.neuronGroup.H = self.inputs.InputToH(input)
+            probOfStatesForInput = self.neuronGroup.ProbOfAllStates()
+            probOfStates += probOfInput * probOfStatesForInput
+        return entropy(probOfStates)
+        if covariance:
+            self.inputs.covariance = covariance
         probOfAllStates = self.ProbOfAllStates(J,beta)
         return entropy(probOfAllStates)
 
-    def ConditionalEntropy(self,J,beta):
+    def NoisyEntropy(self,J,beta=None,covariance=None):
+        if covariance:
+            self.inputs.covariance = covariance
+        if beta:
+            self.neuronGroup.beta = beta
         totalEntropy = 0
         probOfAllInputs = self.inputs.ProbOfAllInputs()
-        self.neuronGroup.J = np.array([[1,J],[J,1]])
-        self.neuronGroup.beta = beta
+        self.neuronGroup.J = np.array([[0,J],[0,0]])
         for input,probOfInput in enumerate(probOfAllInputs):
             self.neuronGroup.H = self.inputs.InputToH(input)
             probOfStatesForInput = self.neuronGroup.ProbOfAllStates()
             totalEntropy += probOfInput * entropy(probOfStatesForInput)
         return totalEntropy
 
-    def NoisyEntropy(self,J,beta):
-        return self.EntropyOfOutputs(J,beta) - self.ConditionalEntropy(J,beta)
+    def MutualInformation(self,J,beta,covariance=None):
+        if covariance:
+            self.inputs.covariance = covariance
+        return self.EntropyOfOutputs(J,beta) - self.NoisyEntropy(J,beta)
 
     def FindOptimalJ(self,beta,covariance):
         self.inputs.covariance = covariance
-        delta = 0.01
-        lr = 1000
-        J = 0
-        loops = 0
+        Js = np.arange(-100,100,1)
+        noisyEntropys = [self.NoisyEntropy(J,beta) for J in Js]
+        plt.plot(Js,noisyEntropys)
+        plt.show()
         while True:
             noisyEntropy = self.NoisyEntropy(J,beta)
             noisyEntropyAtDelta = self.NoisyEntropy(J + delta,beta)
             J += lr * (noisyEntropyAtDelta - noisyEntropy)
             loops += 1
-            if np.abs((noisyEntropyAtDelta - noisyEntropy) / J) < 0.0001:
+            if np.abs((noisyEntropyAtDelta - noisyEntropy) / delta) < 0.001:
                 break
 
         return J
-alpha = -0.15
-neuronsWithInputs = NeuronsWithInputs(covariance=alpha)
-Js = np.arange(-1,1,0.1)
-Js = [-0.1,0.1]
-plt.plot(Js,[neuronsWithInputs.NoisyEntropy(J,1) for J in Js])
-plt.show()
-'''
-covariances = np.arange(-0.9,0.9,0.1)
-betas = np.arange(0.1,2,0.5)
-betas = [0.5,1,1.5]
-optimalJ = np.zeros((len(covariances),len(betas)))
 
-for i,covariance in enumerate(covariances):
-    for j,beta in enumerate(betas):
-        optimalJ[i,j] = neuronsWithInputs.FindOptimalJ(beta,covariance)
-optimalJ = np.log(optimalJ.transpose() - np.min(optimalJ) + 1)
-plt.imshow(optimalJ)
+neuronsWithInput = NeuronsWithInputs(covariance=0.5)
+Js = np.arange(-1,1.05,0.1)
+noisyEntropys = np.array([neuronsWithInput.NoisyEntropy(J) for J in Js])
+outputEntropys = np.array([neuronsWithInput.EntropyOfOutputs(J) for J in Js])
+plt.plot(Js,noisyEntropys)
+plt.plot(Js,outputEntropys)
 plt.show()
-'''
+plt.plot(Js,outputEntropys-noisyEntropys)
+plt.show()
+
+
+neurons = NeuronGroup(2)
+neurons.H = np.array([1,-1])
+neurons.J = np.zeros((2,2))
+neurons.beta = 1
+print(neurons.ProbOfAllStates())
+neurons.beta = 100
+print(neurons.ProbOfAllStates())
+neurons.J = np.array([[0,1],[0,0]])
+print(neurons.ProbOfAllStates())
