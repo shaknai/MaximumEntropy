@@ -94,20 +94,22 @@ class NeuronsWithInputs:
         return probOfAllStates
     
     def EntropyOfOutputs(self,J,beta=None,covariance=None):
+        # if covariance:
+        #     self.inputs.covariance = covariance
+        # if beta:
+        #     self.neuronGroup.beta = beta
+        # probOfAllInputs = self.inputs.ProbOfAllInputs()
+        # self.neuronGroup.J = np.array([[0,J],[0,0]])
+        # probOfStates = np.zeros(2**self.neuronGroup.numOfNeurons)
+        # for input,probOfInput in enumerate(probOfAllInputs):
+        #     self.neuronGroup.H = self.inputs.InputToH(input)
+        #     probOfStatesForInput = self.neuronGroup.ProbOfAllStates()
+        #     probOfStates += probOfInput * probOfStatesForInput
+        # return entropy(probOfStates)
         if covariance:
             self.inputs.covariance = covariance
         if beta:
             self.neuronGroup.beta = beta
-        probOfAllInputs = self.inputs.ProbOfAllInputs()
-        self.neuronGroup.J = np.array([[0,J],[0,0]])
-        probOfStates = np.zeros(2**self.neuronGroup.numOfNeurons)
-        for input,probOfInput in enumerate(probOfAllInputs):
-            self.neuronGroup.H = self.inputs.InputToH(input)
-            probOfStatesForInput = self.neuronGroup.ProbOfAllStates()
-            probOfStates += probOfInput * probOfStatesForInput
-        return entropy(probOfStates)
-        if covariance:
-            self.inputs.covariance = covariance
         probOfAllStates = self.ProbOfAllStates(J,beta)
         return entropy(probOfAllStates)
 
@@ -125,44 +127,56 @@ class NeuronsWithInputs:
             totalEntropy += probOfInput * entropy(probOfStatesForInput)
         return totalEntropy
 
-    def MutualInformation(self,J,beta,covariance=None):
+    def MutualInformation(self,J,beta=None,covariance=None):
         if covariance:
             self.inputs.covariance = covariance
         return self.EntropyOfOutputs(J,beta) - self.NoisyEntropy(J,beta)
 
-    def FindOptimalJ(self,beta,covariance):
-        self.inputs.covariance = covariance
-        Js = np.arange(-100,100,1)
-        noisyEntropys = [self.NoisyEntropy(J,beta) for J in Js]
-        plt.plot(Js,noisyEntropys)
-        plt.show()
-        while True:
-            noisyEntropy = self.NoisyEntropy(J,beta)
-            noisyEntropyAtDelta = self.NoisyEntropy(J + delta,beta)
-            J += lr * (noisyEntropyAtDelta - noisyEntropy)
-            loops += 1
-            if np.abs((noisyEntropyAtDelta - noisyEntropy) / delta) < 0.001:
-                break
+    def FindOptimalJ(self,beta=None,covariance=None):
+        return MaximumOfConvexFunction(lambda x: self.MutualInformation(x,beta,covariance))
+    
+def MaximumOfConvexFunction(func):
+    left = -1
+    middle = 0
+    right = 1
+    for _ in range(100):
+        resLeft = func(left)
+        resMiddle = func(middle)
+        resRight = func(right)
+        if resMiddle > resLeft:
+            if resRight > resMiddle:
+                left,middle,right = [middle,right,2*right - middle]
+            else:
+                left,right = [(left + middle)/2,(right + middle)/2]
+        else:
+            left,middle,right = [2*left - middle,left,middle]
+    return middle
 
-        return J
 
-neuronsWithInput = NeuronsWithInputs(covariance=0.5)
+
+
+
+neuronsWithInput = NeuronsWithInputs(covariance=-0.1)
 Js = np.arange(-1,1.05,0.1)
-noisyEntropys = np.array([neuronsWithInput.NoisyEntropy(J) for J in Js])
-outputEntropys = np.array([neuronsWithInput.EntropyOfOutputs(J) for J in Js])
-plt.plot(Js,noisyEntropys)
-plt.plot(Js,outputEntropys)
-plt.show()
-plt.plot(Js,outputEntropys-noisyEntropys)
+# # noisyEntropys = np.array([neuronsWithInput.NoisyEntropy(J) for J in Js])
+# # outputEntropys = np.array([neuronsWithInput.EntropyOfOutputs(J) for J in Js])
+# # plt.plot(Js,noisyEntropys)
+# # plt.plot(Js,outputEntropys)
+# # plt.show()
+# # plt.plot(Js,outputEntropys-noisyEntropys)
+# # plt.show()
+mutualInformations = np.array([neuronsWithInput.MutualInformation(J) for J in Js])
+plt.plot(Js,mutualInformations)
+plt.title(neuronsWithInput.FindOptimalJ())
 plt.show()
 
 
-neurons = NeuronGroup(2)
-neurons.H = np.array([1,-1])
-neurons.J = np.zeros((2,2))
-neurons.beta = 1
-print(neurons.ProbOfAllStates())
-neurons.beta = 100
-print(neurons.ProbOfAllStates())
-neurons.J = np.array([[0,1],[0,0]])
-print(neurons.ProbOfAllStates())
+# neurons = NeuronGroup(2)
+# neurons.H = np.array([1,-1])
+# neurons.J = np.zeros((2,2))
+# neurons.beta = 1
+# print(neurons.ProbOfAllStates())
+# neurons.beta = 100
+# print(neurons.ProbOfAllStates())
+# neurons.J = np.array([[0,1],[0,0]])
+# print(neurons.ProbOfAllStates())
