@@ -10,11 +10,8 @@ class NeuronGroup:
         self.beta = 1
         self.numOfNeurons = numOfNeurons
         self.J = np.random.randn(numOfNeurons,numOfNeurons)
-        # self.J = np.zeros((numOfNeurons,numOfNeurons))
-        # self.J[5][3] = 5
         np.fill_diagonal(self.J,0)
         self.H = np.random.randn(numOfNeurons)
-        # self.H = np.zeros(numOfNeurons)
         self.Z = self.PartitionFunction()
 
     def PartitionFunction(self):
@@ -28,6 +25,9 @@ class NeuronGroup:
     def ProbOfState(self,state):
         if isinstance(state,int):
             state = self.NumToBitsArray(state)
+        if 0 in state:
+            state -= 0.5
+            state *= 2
         return np.e ** (self.beta * self.HamiltonianOfState(state)) / self.Z
 
     def ProbOfAllStates(self):
@@ -137,8 +137,7 @@ class Inputs:
                 probDiff = (1-self.covariance)/4
                 probs = np.zeros(self.numNeurons**2)
                 for i in range(len(probs)):
-                    
-                    if bin(i)[-1] == bin(i)[-2]:
+                    if i in [0,3]:
                         probs[i] = probSame
                     else:
                         probs[i] = probDiff
@@ -146,6 +145,7 @@ class Inputs:
                 raise NotImplementedError
         else:
             raise NotImplementedError
+        
         return probs
 
     def InputToH(self,input):
@@ -163,16 +163,17 @@ class NeuronsWithInputs:
     def ProbOfAllStates(self,J,beta):
         probOfAllInputs = self.inputs.ProbOfAllInputs()
         probOfAllStates = np.zeros(2 ** self.neuronGroup.numOfNeurons)
-        self.neuronGroup.J = np.array([[1,J],[J,1]])
+        self.neuronGroup.J = np.array([[0,J],[J,0]])
         self.neuronGroup.beta = beta
         for input,probOfInput in enumerate(probOfAllInputs):
             self.neuronGroup.H = self.inputs.InputToH(input)
             probOfStatesForInput = self.neuronGroup.ProbOfAllStates()
             probOfAllStates += probOfStatesForInput * probOfInput
+        probOfAllStates /= np.sum(probOfAllStates)
         return probOfAllStates
     
-    def EntropyOfOutputs(self,J):
-        probOfAllStates = self.ProbOfAllStates(J)
+    def EntropyOfOutputs(self,J,beta):
+        probOfAllStates = self.ProbOfAllStates(J,beta)
         return entropy(probOfAllStates)
 
     def ConditionalEntropy(self,J,beta):
@@ -185,8 +186,41 @@ class NeuronsWithInputs:
             probOfStatesForInput = self.neuronGroup.ProbOfAllStates()
             totalEntropy += probOfInput * entropy(probOfStatesForInput)
         return totalEntropy
-    
-neuronsWithInputs = NeuronsWithInputs()
 
+    def NoisyEntropy(self,J,beta):
+        return self.EntropyOfOutputs(J,beta) - self.ConditionalEntropy(J,beta)
 
+    def FindOptimalJ(self,beta,covariance):
+        self.inputs.covariance = covariance
+        delta = 0.01
+        lr = 1000
+        J = 0
+        loops = 0
+        while True:
+            noisyEntropy = self.NoisyEntropy(J,beta)
+            noisyEntropyAtDelta = self.NoisyEntropy(J + delta,beta)
+            J += lr * (noisyEntropyAtDelta - noisyEntropy)
+            loops += 1
+            if np.abs((noisyEntropyAtDelta - noisyEntropy) / J) < 0.0001:
+                break
 
+        return J
+alpha = -0.15
+neuronsWithInputs = NeuronsWithInputs(covariance=alpha)
+Js = np.arange(-1,1,0.1)
+Js = [-0.1,0.1]
+plt.plot(Js,[neuronsWithInputs.NoisyEntropy(J,1) for J in Js])
+plt.show()
+'''
+covariances = np.arange(-0.9,0.9,0.1)
+betas = np.arange(0.1,2,0.5)
+betas = [0.5,1,1.5]
+optimalJ = np.zeros((len(covariances),len(betas)))
+
+for i,covariance in enumerate(covariances):
+    for j,beta in enumerate(betas):
+        optimalJ[i,j] = neuronsWithInputs.FindOptimalJ(beta,covariance)
+optimalJ = np.log(optimalJ.transpose() - np.min(optimalJ) + 1)
+plt.imshow(optimalJ)
+plt.show()
+'''
