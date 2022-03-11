@@ -4,6 +4,7 @@ import numpy as np
 from scipy.stats import entropy
 from matplotlib import pyplot as plt
 from functools import lru_cache
+import tqdm
 
 class NeuronGroup:
     def __init__(self,numOfNeurons):
@@ -147,22 +148,31 @@ class NeuronsWithInputs:
         return J
 
 neuronsWithInput = NeuronsWithInputs(covariance=0.5)
-Js = np.arange(-1,1.05,0.1)
-noisyEntropys = np.array([neuronsWithInput.NoisyEntropy(J) for J in Js])
-outputEntropys = np.array([neuronsWithInput.EntropyOfOutputs(J) for J in Js])
-plt.plot(Js,noisyEntropys)
-plt.plot(Js,outputEntropys)
+alpha = -0.9
+beta = 2.5
+betas = np.arange(0.1,2.5,0.1)
+alphas = np.arange(-0.3,0.31,0.1)
+Js = np.arange(-10,10.05,0.1)
+optimalJs = np.zeros((betas.size,alphas.size))
+for i,beta in tqdm.tqdm(enumerate(betas)):
+    for j,alpha in enumerate(alphas):
+        mutalInformations = np.array([neuronsWithInput.MutualInformation(J,beta,alpha) for J in Js])
+        bestJ = Js[np.argmax(mutalInformations)]
+        bestInf = np.max(mutalInformations)
+        optimalJs[i,j] = bestJ
+plt.imshow(np.log(optimalJs - np.min(optimalJs) + 1))
 plt.show()
-plt.plot(Js,outputEntropys-noisyEntropys)
-plt.show()
+# plt.plot(Js,mutalInformations)
+# plt.plot(bestJ,bestInf,'o')
+# plt.show()
 
 
-neurons = NeuronGroup(2)
-neurons.H = np.array([1,-1])
-neurons.J = np.zeros((2,2))
-neurons.beta = 1
-print(neurons.ProbOfAllStates())
-neurons.beta = 100
-print(neurons.ProbOfAllStates())
-neurons.J = np.array([[0,1],[0,0]])
-print(neurons.ProbOfAllStates())
+# neurons = NeuronGroup(2)
+# neurons.H = np.array([1,-1])
+# neurons.J = np.zeros((2,2))
+# neurons.beta = 1
+# print(neurons.ProbOfAllStates())
+# neurons.beta = 100
+# print(neurons.ProbOfAllStates())
+# neurons.J = np.array([[0,1],[0,0]])
+# print(neurons.ProbOfAllStates())
