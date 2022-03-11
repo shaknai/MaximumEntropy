@@ -132,51 +132,25 @@ class NeuronsWithInputs:
         return self.EntropyOfOutputs(J,beta) - self.NoisyEntropy(J,beta)
 
     def FindOptimalJ(self,beta,covariance):
-        self.inputs.covariance = covariance
-        Js = np.arange(-100,100,1)
-        noisyEntropys = [self.NoisyEntropy(J,beta) for J in Js]
-        plt.plot(Js,noisyEntropys)
-        plt.show()
-        while True:
-            noisyEntropy = self.NoisyEntropy(J,beta)
-            noisyEntropyAtDelta = self.NoisyEntropy(J + delta,beta)
-            J += lr * (noisyEntropyAtDelta - noisyEntropy)
-            loops += 1
-            if np.abs((noisyEntropyAtDelta - noisyEntropy) / delta) < 0.001:
-                break
+        Js = np.arange(-10,10.05,0.1)
+        mutalInformations = np.array([neuronsWithInput.MutualInformation(J,beta,covariance) for J in Js])
+        bestJ = Js[np.argmax(mutalInformations)]
 
-        return J
+        return bestJ
 
 neuronsWithInput = NeuronsWithInputs(covariance=0.5)
 alpha = -0.9
 beta = 2.5
 betas = np.arange(0.5,2.01,0.1)
 alphas = np.arange(-0.3,0.31,0.1)
-Js = np.arange(-10,10.05,0.1)
+
 optimalJs = np.zeros((betas.size,alphas.size))
 for i,beta in tqdm.tqdm(enumerate(betas)):
     for j,alpha in enumerate(alphas):
-        mutalInformations = np.array([neuronsWithInput.MutualInformation(J,beta,alpha) for J in Js])
-        bestJ = Js[np.argmax(mutalInformations)]
-        bestInf = np.max(mutalInformations)
-        optimalJs[i,j] = bestJ
+        optimalJs[i,j] = neuronsWithInput.FindOptimalJ(beta,alpha)
 im = plt.imshow(optimalJs,extent=[min(alphas),max(alphas),max(betas),min(betas)],cmap=plt.get_cmap('seismic'))
 plt.xlabel('Covariance')
 plt.ylabel('beta')
 plt.title('Optimal J')
 plt.colorbar(im)
 plt.show()
-# plt.plot(Js,mutalInformations)
-# plt.plot(bestJ,bestInf,'o')
-# plt.show()
-
-
-# neurons = NeuronGroup(2)
-# neurons.H = np.array([1,-1])
-# neurons.J = np.zeros((2,2))
-# neurons.beta = 1
-# print(neurons.ProbOfAllStates())
-# neurons.beta = 100
-# print(neurons.ProbOfAllStates())
-# neurons.J = np.array([[0,1],[0,0]])
-# print(neurons.ProbOfAllStates())
