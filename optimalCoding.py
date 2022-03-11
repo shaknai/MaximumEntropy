@@ -150,7 +150,7 @@ class NeuronsWithInputs:
 neuronsWithInput = NeuronsWithInputs(covariance=0.5)
 alpha = -0.9
 beta = 2.5
-betas = np.arange(0.1,2.5,0.1)
+betas = np.arange(0.5,2.01,0.1)
 alphas = np.arange(-0.3,0.31,0.1)
 Js = np.arange(-10,10.05,0.1)
 optimalJs = np.zeros((betas.size,alphas.size))
@@ -160,7 +160,11 @@ for i,beta in tqdm.tqdm(enumerate(betas)):
         bestJ = Js[np.argmax(mutalInformations)]
         bestInf = np.max(mutalInformations)
         optimalJs[i,j] = bestJ
-plt.imshow(np.log(optimalJs - np.min(optimalJs) + 1))
+im = plt.imshow(optimalJs,extent=[min(alphas),max(alphas),max(betas),min(betas)],cmap=plt.get_cmap('seismic'))
+plt.xlabel('Covariance')
+plt.ylabel('beta')
+plt.title('Optimal J')
+plt.colorbar(im)
 plt.show()
 # plt.plot(Js,mutalInformations)
 # plt.plot(bestJ,bestInf,'o')
