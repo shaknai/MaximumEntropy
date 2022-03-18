@@ -1,10 +1,15 @@
 from aifc import Error
 from os import stat
+from tabnanny import verbose
 import numpy as np
 from scipy.stats import entropy
 from matplotlib import pyplot as plt
 from functools import lru_cache
 import tqdm
+from pymoo.algorithms.soo.nonconvex.pattern_search import PatternSearch
+from pymoo.factory import Himmelblau
+from pymoo.optimize import minimize
+from pymoo.core.problem import Problem
 
 class NeuronGroup:
     def __init__(self,numOfNeurons):
@@ -127,47 +132,75 @@ class NeuronsWithInputs:
         Js = np.arange(-10,10.05,0.1)
         mutalInformations = np.array([self.MutualInformation(J,beta,covariance) for J in Js])
         bestJ = Js[np.argmax(mutalInformations)]
-        plt.figure()
-        plt.plot(Js,mutalInformations)
-        plt.show(block=False)
+        # plt.figure()
+        # plt.plot(Js,mutalInformations)
+        # plt.show(block=False)
         return bestJ
     
-    def FindOptimalJGradientDescent(self,beta,covariance,lr):
+    def MinusMutualInformation(self,J):
+        return -self.MutualInformation(J)
+    def FindOptimalJGradientDescent(self,beta,covariance,lr,last=None,ratiolrIfClose = 1):
         self.inputs.covariance = covariance
         self.neuronGroup.beta = beta
-        return gradient_descent(self.optimalJGradient, 0, lr)
+        if last is None:
+            last = 0
+        # else:
+        #     lr *= ratiolrIfClose
+        problem = MyProblem(self)
+        algorithm = PatternSearch()
+        return minimize(problem,algorithm,verbose=False,seed=1).X
+        # return gradient_descent(self.optimalJGradient, last, lr)
 
+    
     def optimalJGradient(self,J):
         delta = 0.1
-
         return -(self.MutualInformation(J + delta) - self.MutualInformation(J - delta)) / (2*delta)
 
-def gradient_descent(gradient, start, learn_rate, n_iter=50, tolerance=1e-06):
+class MyProblem(Problem):
+    def __init__(self,neuronsWithInputs):
+        super().__init__(n_var=1, n_obj=1, n_constr=0, xl=-1, xu=1)
+        self.neuronsWithInputs = neuronsWithInputs
+
+    def _evaluate(self, x, out, *args, **kwargs):
+         out["F"] = np.array([self.neuronsWithInputs.MinusMutualInformation(indX) for indX in x])
+
+        
+def gradient_descent(gradient, start, learn_rate, n_iter=100, tolerance=1e-06):
     vector = start
-    for _ in range(n_iter):
+    for i_iter in range(n_iter):
+        # plt.axvline(vector)
         diff = -learn_rate * gradient(vector)
         if np.all(np.abs(diff) <= tolerance):
+            # print(f'Stopped at iter {i_iter}')
             break
         vector += diff
-        plt.axvline(vector)
+        
     return vector
 
 neuronsWithInput = NeuronsWithInputs(covariance=0.5)
 alpha = -0.9
 beta = 2.5
-betas = np.arange(0.5,2.01,0.1)
-alphas = np.arange(-0.3,0.31,0.1)
-
+betas = np.arange(0.5,2.01,0.01)
+alphas = np.arange(-0.3,0.31,0.01)
+lr = 1
+# beta = -2
+# alpha = -0.263
+# print(neuronsWithInput.FindOptimalJ(beta,alpha))
+# print(neuronsWithInput.FindOptimalJGradientDescent(beta,alpha,lr))
+# bla
+print("Working")
 optimalJs = np.zeros((betas.size,alphas.size))
 for i,beta in tqdm.tqdm(enumerate(betas)):
+    last = None
     for j,alpha in enumerate(alphas):
-        #optimalJs[i,j] = neuronsWithInput.FindOptimalJ(beta,alpha)
         print(neuronsWithInput.FindOptimalJ(beta,alpha))
-        print(neuronsWithInput.FindOptimalJGradientDescent(beta,alpha,50))
+        # last = neuronsWithInput.FindOptimalJGradientDescent(beta,alpha,lr,last,50)
+        # optimalJs[i,j] = last
+        print(neuronsWithInput.FindOptimalJGradientDescent(beta,alpha,10))
 im = plt.imshow(optimalJs,extent=[min(alphas),max(alphas),max(betas),min(betas)],cmap=plt.get_cmap('seismic'))
 plt.xlabel('Covariance')
 plt.ylabel('beta')
 plt.title('Optimal J')
 plt.colorbar(im)
-plt.savefig('Binary_Input_Optimal_J.png')
+# plt.savefig('Binary_Input_Optimal_J.png')
 plt.show()
