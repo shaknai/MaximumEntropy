@@ -67,8 +67,11 @@ class Inputs:
             else:
                 raise NotImplementedError
         else:
-            raise NotImplementedError
-        
+            if self.typeInput == 'random':
+                probs = np.random.rand(2**self.numNeurons)
+                probs /= sum(probs)
+            else:
+                raise NotImplementedError
         return probs
 
     def InputToH(self,input):
@@ -165,17 +168,17 @@ class MyProblem(Problem):
          out["F"] = np.array([self.neuronsWithInputs.MinusMutualInformation(indX) for indX in x])
 
         
-def gradient_descent(gradient, start, learn_rate, n_iter=100, tolerance=1e-06):
-    vector = start
-    for i_iter in range(n_iter):
-        # plt.axvline(vector)
-        diff = -learn_rate * gradient(vector)
-        if np.all(np.abs(diff) <= tolerance):
-            # print(f'Stopped at iter {i_iter}')
-            break
-        vector += diff
+# def gradient_descent(gradient, start, learn_rate, n_iter=100, tolerance=1e-06):
+#     vector = start
+#     for i_iter in range(n_iter):
+#         # plt.axvline(vector)
+#         diff = -learn_rate * gradient(vector)
+#         if np.all(np.abs(diff) <= tolerance):
+#             # print(f'Stopped at iter {i_iter}')
+#             break
+#         vector += diff
         
-    return vector
+#     return vector
 
 neuronsWithInput = NeuronsWithInputs(covariance=0.5)
 alpha = -0.9
@@ -193,10 +196,10 @@ optimalJs = np.zeros((betas.size,alphas.size))
 for i,beta in tqdm.tqdm(enumerate(betas)):
     last = None
     for j,alpha in enumerate(alphas):
-        print(neuronsWithInput.FindOptimalJ(beta,alpha))
-        # last = neuronsWithInput.FindOptimalJGradientDescent(beta,alpha,lr,last,50)
-        # optimalJs[i,j] = last
-        print(neuronsWithInput.FindOptimalJGradientDescent(beta,alpha,10))
+        # print(neuronsWithInput.FindOptimalJ(beta,alpha))
+        last = neuronsWithInput.FindOptimalJGradientDescent(beta,alpha,lr,last,50)
+        optimalJs[i,j] = last
+        # print(neuronsWithInput.FindOptimalJGradientDescent(beta,alpha,10))
 im = plt.imshow(optimalJs,extent=[min(alphas),max(alphas),max(betas),min(betas)],cmap=plt.get_cmap('seismic'))
 plt.xlabel('Covariance')
 plt.ylabel('beta')
