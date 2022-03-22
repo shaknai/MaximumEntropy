@@ -58,7 +58,8 @@ class Inputs:
     
     def ProbOfAllInputs(self):
         if self.inputProbs is not None:
-            assert sum(self.inputProbs) == 1, "sum of given probs doesn't equal 1."
+            assert sum(self.inputProbs) > 0.95 and sum(self.inputProbs) < 1.05, "sum of given probs doesn't equal 1."
+            self.inputProbs /= sum(self.inputProbs)
             return self.inputProbs
         if self.typeInput == 'binary':
             if self.numNeurons == 2:
@@ -238,15 +239,30 @@ def mainIndependentInputs():
     print(f"{MaximalEntropyTwoPairs}, {2*MaximalEntropySinglePair}")
 
 def mainDependentInputs():
-    firstPairProbs = NoCorrelationInputsBetweenPairs([0.5])
-    relationToSecondPair = np.random.rand(firstPairProbs.size,firstPairProbs.size)
-    noiseInCorrelation = 1
+    # firstPairProbs = NoCorrelationInputsBetweenPairs([0.5])
+    # relationToSecondPair = np.random.rand(firstPairProbs.size,firstPairProbs.size)
+    # noiseInCorrelation = 1
     beta = 1
-    inputProbs = InputCombiner(firstPairProbs=firstPairProbs,relationToSecondPair=relationToSecondPair,noiseInCorrelation=noiseInCorrelation)
+    inputProbs = NoCorrelationInputsBetweenPairs([0.5,0.5])
+    # inputProbs = InputCombiner(firstPairProbs=firstPairProbs,relationToSecondPair=relationToSecondPair,noiseInCorrelation=noiseInCorrelation)
     neuronsWithInputs = NeuronsWithInputs(numOfNeurons=4,inputProbs=inputProbs)
     optimalJBoth,MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
+    inputProbsFirstPair , inputProbsSecondPair = InputSplitter(inputProbs=inputProbs)
+    neuronsWithInputsFirst = NeuronsWithInputs(numOfNeurons=2,inputProbs=inputProbsFirstPair)
+    neuronsWithInputsSecond = NeuronsWithInputs(numOfNeurons=2,inputProbs=inputProbsSecondPair)
+    optimalJFirst,MaximalEntropyFirst = neuronsWithInputsFirst.FindOptimalJPatternSearch(beta=beta)
+    optimalJSecond,MaximalEntropySecond = neuronsWithInputsSecond.FindOptimalJPatternSearch(beta=beta)
+    print(f"Mutual information of both together is: {MaximalEntropyBoth}")
+    print(f"Sum of both pairs' mutual information is: {MaximalEntropyFirst+MaximalEntropySecond}")
+    print(f"Mutual information of first is: {MaximalEntropyFirst}")
+    print(f"Mutual information of second is: {MaximalEntropySecond}")
 
-    print(f"Maximal mutual information of inputs with noise {noiseInCorrelation}: {MaximalEntropyBoth}")
+
+
+    
+
+
+    # print(f"Maximal mutual information of inputs with noise {noiseInCorrelation}: {MaximalEntropyBoth}")
     
 def checkingInputCombiner():
     firstPairProbs = Inputs(2,covariance=1).ProbOfAllInputs()
@@ -262,6 +278,6 @@ def checkingInputSplitter():
 
 if __name__ == '__main__':
     # main()
-    # mainDependentInputs()
+    mainDependentInputs()
     # checkingInputCombiner()
-    checkingInputSplitter()
+    # checkingInputSplitter()
