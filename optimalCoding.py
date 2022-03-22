@@ -1,6 +1,8 @@
 from aifc import Error
 from os import stat
 from tabnanny import verbose
+from tkinter import NO
+from urllib.parse import _NetlocResultMixinStr
 import numpy as np
 from scipy.stats import entropy
 from matplotlib import pyplot as plt
@@ -9,7 +11,7 @@ import tqdm
 from pymoo.algorithms.soo.nonconvex.pattern_search import PatternSearch
 from pymoo.factory import Himmelblau
 from pymoo.optimize import minimize
-from pymoo.core.problem import Problem
+from pymoo.core.problem import Problem,ElementwiseProblem
 
 class NeuronGroup:
     def __init__(self,numOfNeurons):
@@ -48,12 +50,16 @@ class NeuronGroup:
         return bits
    
 class Inputs:
-    def __init__(self, numNeurons, typeInput = 'binary', covariance = 0):
+    def __init__(self, numNeurons, typeInput = 'binary', covariance = 0,inputProbs=None):
         self.numNeurons = numNeurons
         self.typeInput = typeInput
         self.covariance = covariance
+        self.inputProbs = inputProbs
     
     def ProbOfAllInputs(self):
+        if self.inputProbs is not None:
+            assert sum(self.inputProbs) == 1, "sum of given probs doesn't equal 1."
+            return self.inputProbs
         if self.typeInput == 'binary':
             if self.numNeurons == 2:
                 probSame = (1+self.covariance)/4
@@ -67,11 +73,7 @@ class Inputs:
             else:
                 raise NotImplementedError
         else:
-            if self.typeInput == 'random':
-                probs = np.random.rand(2**self.numNeurons)
-                probs /= sum(probs)
-            else:
-                raise NotImplementedError
+            raise NotImplementedError
         return probs
 
     def InputToH(self,input):
@@ -82,15 +84,26 @@ class Inputs:
 
 
 class NeuronsWithInputs:
-    def __init__(self,numOfNeurons=2,typeInput='binary',covariance=0):
+    def __init__(self,numOfNeurons=2,typeInput='binary',covariance=0,inputProbs=None):
+        self.numOfNeurons = numOfNeurons
         self.neuronGroup = NeuronGroup(numOfNeurons)
-        self.inputs = Inputs(numOfNeurons,typeInput,covariance)
+        self.inputs = Inputs(numOfNeurons,typeInput,covariance,inputProbs)
     
+    def oneDJToMat(self,J):
+        res = np.zeros((self.numOfNeurons,self.numOfNeurons))
+        indInJ=0
+        for i in range(self.numOfNeurons):
+            for j in range(i+1,self.numOfNeurons):
+                res[i,j] = J[indInJ]
+                indInJ += 1
+        return res
+
     def ProbOfAllStates(self,J=None,beta=None,covariance = None):
         if covariance:
             self.inputs.covariance = covariance
-        if J:
-            self.neuronGroup.J = np.array([[0,J],[0,0]])
+        
+        self.neuronGroup.J = self.oneDJToMat(J)
+        
         if beta:
             self.neuronGroup.beta = beta
         probOfAllInputs = self.inputs.ProbOfAllInputs()
@@ -117,7 +130,8 @@ class NeuronsWithInputs:
             self.neuronGroup.beta = beta
         totalEntropy = 0
         probOfAllInputs = self.inputs.ProbOfAllInputs()
-        self.neuronGroup.J = np.array([[0,J],[0,0]])
+        self.neuronGroup.J = self.oneDJToMat(J)
+        # self.neuronGroup.J = np.array([[0,J],[0,0]])
         for input,probOfInput in enumerate(probOfAllInputs):
             self.neuronGroup.H = self.inputs.InputToH(input)
             probOfStatesForInput = self.neuronGroup.ProbOfAllStates()
@@ -131,7 +145,7 @@ class NeuronsWithInputs:
             self.inputs.covariance = covariance
         return self.EntropyOfOutputs(J,beta) - self.NoisyEntropy(J,beta)
 
-    def FindOptimalJ(self,beta,covariance):
+    def FindOptimalJBruteForce(self,beta,covariance):
         Js = np.arange(-10,10.05,0.1)
         mutalInformations = np.array([self.MutualInformation(J,beta,covariance) for J in Js])
         bestJ = Js[np.argmax(mutalInformations)]
@@ -142,68 +156,88 @@ class NeuronsWithInputs:
     
     def MinusMutualInformation(self,J):
         return -self.MutualInformation(J)
-    def FindOptimalJGradientDescent(self,beta,covariance,lr,last=None,ratiolrIfClose = 1):
-        self.inputs.covariance = covariance
+
+    def FindOptimalJPatternSearch(self,beta,covariance=0,inputProbs=None):
         self.neuronGroup.beta = beta
-        if last is None:
-            last = 0
-        # else:
-        #     lr *= ratiolrIfClose
-        problem = MyProblem(self)
+        self.inputs.covariance = covariance
+        if inputProbs:
+            self.inputs.inputProbs = inputProbs    
+        problem = ElementWiseMinEntropy(self)
         algorithm = PatternSearch()
-        return minimize(problem,algorithm,verbose=False,seed=1).X
-        # return gradient_descent(self.optimalJGradient, last, lr)
+        res = minimize(problem,algorithm,verbose=False,seed=1)
+        return res.X, -res.F #Returns optimal J and maximal mutual information
 
     
     def optimalJGradient(self,J):
         delta = 0.1
         return -(self.MutualInformation(J + delta) - self.MutualInformation(J - delta)) / (2*delta)
 
-class MyProblem(Problem):
+# class MyProblem(Problem):
+#     def __init__(self,neuronsWithInputs):
+#         super().__init__(n_var=1, n_obj=1, n_constr=0, xl=-1, xu=1)
+#         self.neuronsWithInputs = neuronsWithInputs
+
+#     def _evaluate(self, x, out, *args, **kwargs):
+#          out["F"] = np.array([self.neuronsWithInputs.MinusMutualInformation(indX) for indX in x])
+
+    
+class ElementWiseMinEntropy(ElementwiseProblem):
     def __init__(self,neuronsWithInputs):
-        super().__init__(n_var=1, n_obj=1, n_constr=0, xl=-1, xu=1)
-        self.neuronsWithInputs = neuronsWithInputs
-
+        amountOfEdges = neuronsWithInputs.numOfNeurons * (neuronsWithInputs.numOfNeurons - 1) // 2
+        xl = np.zeros(amountOfEdges) - 1
+        xu = np.zeros(amountOfEdges) + 1
+        super().__init__(n_var = amountOfEdges, n_obj=1, n_constr=0, xl=xl, xu=xu)
+        self.neuronsWithInputs = neuronsWithInputs      
     def _evaluate(self, x, out, *args, **kwargs):
-         out["F"] = np.array([self.neuronsWithInputs.MinusMutualInformation(indX) for indX in x])
+         out["F"] = np.array(self.neuronsWithInputs.MinusMutualInformation(x))
 
-        
-# def gradient_descent(gradient, start, learn_rate, n_iter=100, tolerance=1e-06):
-#     vector = start
-#     for i_iter in range(n_iter):
-#         # plt.axvline(vector)
-#         diff = -learn_rate * gradient(vector)
-#         if np.all(np.abs(diff) <= tolerance):
-#             # print(f'Stopped at iter {i_iter}')
-#             break
-#         vector += diff
-        
-#     return vector
+def NoCorrelationInputsBetweenPairs(covs):
+    probsOfEachPair = []
+    amountOfPairs = len(covs)
+    amountOfNeurons = amountOfPairs*2
+    for cov in covs:
+        probsOfEachPair.append(Inputs(2,covariance=cov).ProbOfAllInputs())
+    probOfAllStates = np.ones(2**(amountOfNeurons))
+    for state in range(len(probOfAllStates)):
+        for pair in range(amountOfPairs):
+            probOfAllStates[state] *= probsOfEachPair[pair][(state>>(2*pair)) & 3]
+    return probOfAllStates
 
-neuronsWithInput = NeuronsWithInputs(covariance=0.5)
-alpha = -0.9
-beta = 2.5
-betas = np.arange(0.5,2.01,0.01)
-alphas = np.arange(-0.3,0.31,0.01)
-lr = 1
-# beta = -2
-# alpha = -0.263
-# print(neuronsWithInput.FindOptimalJ(beta,alpha))
-# print(neuronsWithInput.FindOptimalJGradientDescent(beta,alpha,lr))
-# bla
-print("Working")
-optimalJs = np.zeros((betas.size,alphas.size))
-for i,beta in tqdm.tqdm(enumerate(betas)):
-    last = None
-    for j,alpha in enumerate(alphas):
-        # print(neuronsWithInput.FindOptimalJ(beta,alpha))
-        last = neuronsWithInput.FindOptimalJGradientDescent(beta,alpha,lr,last,50)
-        optimalJs[i,j] = last
-        # print(neuronsWithInput.FindOptimalJGradientDescent(beta,alpha,10))
-im = plt.imshow(optimalJs,extent=[min(alphas),max(alphas),max(betas),min(betas)],cmap=plt.get_cmap('seismic'))
-plt.xlabel('Covariance')
-plt.ylabel('beta')
-plt.title('Optimal J')
-plt.colorbar(im)
-# plt.savefig('Binary_Input_Optimal_J.png')
-plt.show()
+def InputCombiner(firstPairProbs, relationToSecondPair, noiseInCorrelation = 0):
+    assert 0 <= noiseInCorrelation <= 1, f"noiseInCorrelation is supposed to be between 0 and 1, got {noiseInCorrelation}"
+    probOfBothInputs = np.zeros(relationToSecondPair.size)
+    for input in range(probOfBothInputs.size):
+        indexFirstPair = input & 3
+        indexSecondPair = input >> 2
+        probOfFirstPair = firstPairProbs[indexFirstPair]
+        cleanProbBothPairs = probOfFirstPair * relationToSecondPair[indexFirstPair,indexSecondPair]
+        noise = np.random.rand() / probOfBothInputs.size
+        probOfBothInputs[input] = (1-noiseInCorrelation) * cleanProbBothPairs + noiseInCorrelation*noise
+    probOfBothInputs /= np.sum(probOfBothInputs)
+    return probOfBothInputs
+
+def main():
+    # neuronsWithInput = NeuronsWithInputs(covariance=0.5)
+    covs = [0.5]
+    inputProbs = NoCorrelationInputsBetweenPairs(covs)
+    neuronsWithInputs = NeuronsWithInputs(numOfNeurons=len(covs)*2,inputProbs=inputProbs)
+    print(neuronsWithInputs.FindOptimalJPatternSearch(beta=0.5))
+    # print(neuronsWithInputs.FindOptimalJPatternSearch(beta=1))
+    # print(neuronsWithInputs.FindOptimalJPatternSearch(beta=100.5))
+    covs = [0.5,0.5]
+    inputProbs = NoCorrelationInputsBetweenPairs(covs)
+    neuronsWithInputs = NeuronsWithInputs(numOfNeurons=len(covs)*2,inputProbs=inputProbs)
+    print(neuronsWithInputs.FindOptimalJPatternSearch(beta=0.5))
+    # print(neuronsWithInputs.FindOptimalJPatternSearch(beta=1))
+    # print(neuronsWithInputs.FindOptimalJPatternSearch(beta=1.5))
+    
+def checkingInputCombiner():
+    firstPairProbs = Inputs(2,covariance=1).ProbOfAllInputs()
+    relationToSecondPair = np.random.rand(firstPairProbs.size,firstPairProbs.size)
+    noiseInCorrelation = 1
+    plt.plot(InputCombiner(firstPairProbs,relationToSecondPair,noiseInCorrelation))
+    plt.show()
+
+if __name__ == '__main__':
+    # main()
+    checkingInputCombiner()
