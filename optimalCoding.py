@@ -244,6 +244,9 @@ def mainDependentInputs():
     # noiseInCorrelation = 1
     beta = 1
     inputProbs = NoCorrelationInputsBetweenPairs([0.5,0.5])
+    noiseAmount = 0.01
+    inputProbs = (1-noiseAmount)*inputProbs + noiseAmount*np.random.rand(inputProbs.size)
+    inputProbs /= sum(inputProbs)
     # inputProbs = InputCombiner(firstPairProbs=firstPairProbs,relationToSecondPair=relationToSecondPair,noiseInCorrelation=noiseInCorrelation)
     neuronsWithInputs = NeuronsWithInputs(numOfNeurons=4,inputProbs=inputProbs)
     optimalJBoth,MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
@@ -254,6 +257,7 @@ def mainDependentInputs():
     optimalJSecond,MaximalEntropySecond = neuronsWithInputsSecond.FindOptimalJPatternSearch(beta=beta)
     print(f"Mutual information of both together is: {MaximalEntropyBoth}")
     print(f"Sum of both pairs' mutual information is: {MaximalEntropyFirst+MaximalEntropySecond}")
+    print(f"Amount of mutual information received by connecting both pairs is: {MaximalEntropyFirst+MaximalEntropySecond - MaximalEntropyBoth}")
     print(f"Mutual information of first is: {MaximalEntropyFirst}")
     print(f"Mutual information of second is: {MaximalEntropySecond}")
 
