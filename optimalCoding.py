@@ -216,20 +216,37 @@ def InputCombiner(firstPairProbs, relationToSecondPair, noiseInCorrelation = 0):
     probOfBothInputs /= np.sum(probOfBothInputs)
     return probOfBothInputs
 
-def main():
-    # neuronsWithInput = NeuronsWithInputs(covariance=0.5)
+def InputSplitter(inputProbs,sizesOfSplits=[2,2]):
+    probsForEachSplit = [np.zeros(2**size) for size in sizesOfSplits]
+    for input,inputProb in enumerate(inputProbs):
+        for splitInd,splitSize in enumerate(sizesOfSplits):
+            probsForEachSplit[splitInd][(input>>sum(sizesOfSplits[splitInd+1:])) & (2**splitSize - 1)] += inputProb
+    return probsForEachSplit
+
+
+
+def mainIndependentInputs():
+    beta = 0.5
     covs = [0.5]
     inputProbs = NoCorrelationInputsBetweenPairs(covs)
     neuronsWithInputs = NeuronsWithInputs(numOfNeurons=len(covs)*2,inputProbs=inputProbs)
-    print(neuronsWithInputs.FindOptimalJPatternSearch(beta=0.5))
-    # print(neuronsWithInputs.FindOptimalJPatternSearch(beta=1))
-    # print(neuronsWithInputs.FindOptimalJPatternSearch(beta=100.5))
+    optimalJSinglePair,MaximalEntropySinglePair =neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
     covs = [0.5,0.5]
     inputProbs = NoCorrelationInputsBetweenPairs(covs)
     neuronsWithInputs = NeuronsWithInputs(numOfNeurons=len(covs)*2,inputProbs=inputProbs)
-    print(neuronsWithInputs.FindOptimalJPatternSearch(beta=0.5))
-    # print(neuronsWithInputs.FindOptimalJPatternSearch(beta=1))
-    # print(neuronsWithInputs.FindOptimalJPatternSearch(beta=1.5))
+    optimalJTwoPairs,MaximalEntropyTwoPairs = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
+    print(f"{MaximalEntropyTwoPairs}, {2*MaximalEntropySinglePair}")
+
+def mainDependentInputs():
+    firstPairProbs = NoCorrelationInputsBetweenPairs([0.5])
+    relationToSecondPair = np.random.rand(firstPairProbs.size,firstPairProbs.size)
+    noiseInCorrelation = 1
+    beta = 1
+    inputProbs = InputCombiner(firstPairProbs=firstPairProbs,relationToSecondPair=relationToSecondPair,noiseInCorrelation=noiseInCorrelation)
+    neuronsWithInputs = NeuronsWithInputs(numOfNeurons=4,inputProbs=inputProbs)
+    optimalJBoth,MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
+
+    print(f"Maximal mutual information of inputs with noise {noiseInCorrelation}: {MaximalEntropyBoth}")
     
 def checkingInputCombiner():
     firstPairProbs = Inputs(2,covariance=1).ProbOfAllInputs()
@@ -238,6 +255,13 @@ def checkingInputCombiner():
     plt.plot(InputCombiner(firstPairProbs,relationToSecondPair,noiseInCorrelation))
     plt.show()
 
+def checkingInputSplitter():
+    # inputProbs = NoCorrelationInputsBetweenPairs([0.5])
+    inputProbs = np.array([0,1,0,0])
+    print(InputSplitter(inputProbs,[1,1]))
+
 if __name__ == '__main__':
     # main()
-    checkingInputCombiner()
+    # mainDependentInputs()
+    # checkingInputCombiner()
+    checkingInputSplitter()
