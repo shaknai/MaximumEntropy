@@ -1,5 +1,3 @@
-from aifc import Error
-from asyncio import BaseTransport
 import os
 import numpy as np
 import pandas as pd
@@ -9,7 +7,6 @@ from functools import lru_cache
 import itertools
 import tqdm
 from pymoo.algorithms.soo.nonconvex.pattern_search import PatternSearch
-from pymoo.factory import Himmelblau
 from pymoo.optimize import minimize
 from pymoo.core.problem import Problem,ElementwiseProblem
 from datetime import datetime
@@ -31,9 +28,6 @@ class NeuronGroup:
         hamiltonians -= np.max(hamiltonians)
         res = self.ProbOfStateFromHamiltonian(hamiltonians)
         res /= np.sum(res)
-        # CUTOFF = 10**(-7)
-        # res[res < CUTOFF] = 0
-        # res /= np.sum(res)
         return res
 
     def HamiltonianOfState(self, state):
@@ -90,7 +84,6 @@ class Inputs:
         H = np.array([0] * (self.numNeurons - len(bits)) + bits,dtype=np.float32)
         H = (H - 0.5) * 2
         return H
-
 
 class NeuronsWithInputs:
     def __init__(self,numOfNeurons=2,typeInput='binary',covariance=0,inputProbs=None):
@@ -243,9 +236,6 @@ def MutualInfromationOfInputs(inputProbs,sizesOfSplits=[2,2]):
             multOfProbsOfSplits *= probsForEachSplit[splitInd][(input>>sum(sizesOfSplits[splitInd+1:])) & (2**splitSize - 1)]
         mutIn += inputProb * np.log(inputProb / multOfProbsOfSplits)
     return mutIn
-
-    
-
 
 def recreatingResult():
     betas = np.arange(0.5,2,0.1)
