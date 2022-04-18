@@ -8,47 +8,7 @@ import pandas as pd
 import tqdm
 import itertools
 from NeuronGroup import NeuronGroup
-def NoCorrelationInputsBetweenPairs(covs):
-    probsOfEachPair = []
-    amountOfPairs = len(covs)
-    amountOfNeurons = amountOfPairs*2
-    for cov in covs:
-        probsOfEachPair.append(Inputs(2,covariance=cov).ProbOfAllInputs())
-    probOfAllStates = np.ones(2**(amountOfNeurons))
-    for state in range(len(probOfAllStates)):
-        for pair in range(amountOfPairs):
-            probOfAllStates[state] *= probsOfEachPair[pair][(state>>(2*pair)) & 3]
-    return probOfAllStates
-
-def InputCombiner(firstPairProbs, relationToSecondPair, noiseInCorrelation = 0):
-    assert 0 <= noiseInCorrelation <= 1, f"noiseInCorrelation is supposed to be between 0 and 1, got {noiseInCorrelation}"
-    probOfBothInputs = np.zeros(relationToSecondPair.size)
-    for input in range(probOfBothInputs.size):
-        indexFirstPair = input & 3
-        indexSecondPair = input >> 2
-        probOfFirstPair = firstPairProbs[indexFirstPair]
-        cleanProbBothPairs = probOfFirstPair * relationToSecondPair[indexFirstPair,indexSecondPair]
-        noise = np.random.rand() / probOfBothInputs.size
-        probOfBothInputs[input] = (1-noiseInCorrelation) * cleanProbBothPairs + noiseInCorrelation*noise
-    probOfBothInputs /= np.sum(probOfBothInputs)
-    return probOfBothInputs
-
-def InputSplitter(inputProbs,sizesOfSplits=[2,2]):
-    probsForEachSplit = [np.zeros(2**size) for size in sizesOfSplits]
-    for input,inputProb in enumerate(inputProbs):
-        for splitInd,splitSize in enumerate(sizesOfSplits):
-            probsForEachSplit[splitInd][(input>>sum(sizesOfSplits[splitInd+1:])) & (2**splitSize - 1)] += inputProb
-    return probsForEachSplit
-
-def MutualInfromationOfInputs(inputProbs,sizesOfSplits=[2,2]):
-    probsForEachSplit = InputSplitter(inputProbs,sizesOfSplits)
-    mutIn = 0
-    for input,inputProb in enumerate(inputProbs):
-        multOfProbsOfSplits = 1
-        for splitInd,splitSize in enumerate(sizesOfSplits):
-            multOfProbsOfSplits *= probsForEachSplit[splitInd][(input>>sum(sizesOfSplits[splitInd+1:])) & (2**splitSize - 1)]
-        mutIn += inputProb * np.log(inputProb / multOfProbsOfSplits)
-    return mutIn
+from utils import *
 
 def recreatingResult():
     betas = np.arange(0.5,2,0.1)
@@ -63,7 +23,6 @@ def recreatingResult():
     plt.imshow(np.log(res))
     plt.show()
    
-
 def mainIndependentInputs():
     beta = 50
     covs = [0.1]
@@ -78,24 +37,57 @@ def mainIndependentInputs():
     print(f"Single pair J: {optimalJSinglePair}")
     print(f"Two pairs J: {optimalJTwoPairs}")
 
+def mainDependentInputsDifferentBetas():
+    dirName = f"{datetime.now().strftime('%d-%m-%Y_(%H:%M:%S)')}_different_betas"
+    mkdir(f'logs/{dirName}')
+    betas = np.arange(1,5)
+    cleanProbs = NoCorrelationInputsBetweenPairs([0.5,0.5])
+    noisyProbs = np.random.rand(cleanProbs.size)
+    noisyProbs /= sum(noisyProbs)
+    noiseAmounts = np.arange(0,1,0.1)
+    res = np.zeros((noiseAmounts.size,betas.size))
+    for i,noiseAmount in enumerate(noiseAmounts):
+        inputProbs = (1-noiseAmount)*cleanProbs + noiseAmount*noisyProbs
+        inputProbs /= sum(inputProbs)
+        mutinInputs = MutualInformationOfInputs(inputProbs)
+        deltaInMutualInformationNeuronsPerNoise = []
+        for j,beta in enumerate(betas):
+            neuronsWithInputs = NeuronsWithInputs(numOfNeurons=4,inputProbs=inputProbs)
+            optimalJBoth,MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
+            inputProbsFirstPair , inputProbsSecondPair = InputSplitter(inputProbs=inputProbs)
+
+            neuronsWithInputsFirst = NeuronsWithInputs(numOfNeurons=2,inputProbs=inputProbsFirstPair)
+            neuronsWithInputsSecond = NeuronsWithInputs(numOfNeurons=2,inputProbs=inputProbsSecondPair)
+            optimalJFirst,MaximalEntropyFirst = neuronsWithInputsFirst.FindOptimalJPatternSearch(beta=beta)
+            optimalJSecond,MaximalEntropySecond = neuronsWithInputsSecond.FindOptimalJPatternSearch(beta=beta)
+            deltaInMutualInformationNeuronsPerNoise.append(MaximalEntropyFirst + MaximalEntropySecond - MaximalEntropyBoth)
+            res[i,j] = mutinInputs - deltaInMutualInformationNeuronsPerNoise[-1]
+    # plt.plot(betas,MutualInformationOfInputs(inputProbs) -  deltaInMutualInformationNeuronsPerNoise,'o')
+    plt.imshow(res)
+    plt.savefig(f'logs/{dirName}/Mutual_information_by_connecting_time_frames_beta_{beta}.png')
+    plt.xlabel('Beta')
+    plt.ylabel('Mutual Information of pairs of inputs')
+    plt.show()
+
 def mainDependentInputs():
     # firstPairProbs = NoCorrelationInputsBetweenPairs([0.5])
     # relationToSecondPair = np.random.rand(firstPairProbs.size,firstPairProbs.size)
     # noiseInCorrelation = 1
-    beta = 1
+    beta = 10
     dirName = f"{datetime.now().strftime('%d-%m-%Y_(%H:%M:%S)')}_beta_{beta}"
-    mkdir(f'logs/{dirName}')
+    # mkdir(f'logs/{dirName}')
     cleanProbs = NoCorrelationInputsBetweenPairs([0.5,0.5])
     noisyProbs = np.random.rand(cleanProbs.size)
     noisyProbs /= sum(noisyProbs)
-    pd.DataFrame({'cleanProbs':cleanProbs,'noisyProbs':noisyProbs}).to_csv(f'logs/{dirName}/probs.csv')
-    noiseAmounts = np.arange(0,1,0.01)
+    # pd.DataFrame({'cleanProbs':cleanProbs,'noisyProbs':noisyProbs}).to_csv(f'logs/{dirName}/probs.csv')
+    # noiseAmounts = np.arange(0,1,0.1)
+    noiseAmounts = np.array([0.8])
     deltaInMutualInformationNeuronsPerNoise = []
     mutualInformationInputs = []
     for noiseAmount in tqdm.tqdm(noiseAmounts):
         inputProbs = (1-noiseAmount)*cleanProbs + noiseAmount*noisyProbs
         inputProbs /= sum(inputProbs)
-        mutualInformationInputs.append(MutualInfromationOfInputs(inputProbs))
+        mutualInformationInputs.append(MutualInformationOfInputs(inputProbs))
         # inputProbs = InputCombiner(firstPairProbs=firstPairProbs,relationToSecondPair=relationToSecondPair,noiseInCorrelation=noiseInCorrelation)
         neuronsWithInputs = NeuronsWithInputs(numOfNeurons=4,inputProbs=inputProbs)
         optimalJBoth,MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
@@ -111,17 +103,16 @@ def mainDependentInputs():
     # plt.xscale('log')
     plt.xlabel('Mutal information of inputs between the frames')
     plt.ylabel('Mutual infromation difference gained')
-    plt.savefig(f'logs/{dirName}/Mutual_information_by_connecting_time_frames_beta_{beta}.png')
+    # plt.savefig(f'logs/{dirName}/Mutual_information_by_connecting_time_frames_beta_{beta}.png')
     plt.show()
-    mutualInformationInputs = np.array(mutualInformationInputs)
-    deltaInMutualInformationNeuronsPerNoise = np.array(deltaInMutualInformationNeuronsPerNoise)
-    mutualInformationInputs = mutualInformationInputs.reshape(deltaInMutualInformationNeuronsPerNoise.shape)
-    pd.DataFrame([{'mutualInformationInputs':mutualInformationInputs,'deltaInMutualInformationNeuronsPerNoise':deltaInMutualInformationNeuronsPerNoise}]).to_csv(f'logs/{dirName}/mutins.csv')
+    # mutualInformationInputs = np.array(mutualInformationInputs)
+    # deltaInMutualInformationNeuronsPerNoise = np.array(deltaInMutualInformationNeuronsPerNoise)
+    # mutualInformationInputs = mutualInformationInputs.reshape(deltaInMutualInformationNeuronsPerNoise.shape)
+    # pd.DataFrame([{'mutualInformationInputs':mutualInformationInputs,'deltaInMutualInformationNeuronsPerNoise':deltaInMutualInformationNeuronsPerNoise}]).to_csv(f'logs/{dirName}/mutins.csv')
 
-    plt.plot(mutualInformationInputs - deltaInMutualInformationNeuronsPerNoise,'o')
-    plt.show()
-    plt.title("Difference between mutin of inputs and mutIn of neurons")
-
+    # plt.plot(mutualInformationInputs - deltaInMutualInformationNeuronsPerNoise,'o')
+    # plt.show()
+    # plt.title("Difference between mutin of inputs and mutIn of neurons")
 
 def mainSimilarityOfInputs():
     beta = 0.1
@@ -182,7 +173,7 @@ def checkingMutualInformation():
     mutualInformationInputs = []
     for noiseAmount in tqdm.tqdm(noiseAmounts):
         inputProbs = (1-noiseAmount)*cleanProbs + noiseAmount*noisyProbs
-        mutualInformationInputs.append(MutualInfromationOfInputs(inputProbs))
+        mutualInformationInputs.append(MutualInformationOfInputs(inputProbs))
     plt.plot(noiseAmounts,mutualInformationInputs)
     plt.show()
 
@@ -194,9 +185,9 @@ def checkingNeuronGroup():
     print(ngroup.ProbOfAllStates())
 
 if __name__ == '__main__':
-    # main()
     # mainDependentInputs()
-    checkingHighBeta()
+    # mainSimilarityOfInputs()
+    mainDependentInputsDifferentBetas()
     # checkingNeuronGroup()
     # mainIndependentInputs()
     # recreatingResult()

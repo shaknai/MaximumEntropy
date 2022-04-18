@@ -33,7 +33,7 @@ def InputSplitter(inputProbs,sizesOfSplits=[2,2]):
             probsForEachSplit[splitInd][(input>>sum(sizesOfSplits[splitInd+1:])) & (2**splitSize - 1)] += inputProb
     return probsForEachSplit
 
-def MutualInfromationOfInputs(inputProbs,sizesOfSplits=[2,2]):
+def MutualInformationOfInputs(inputProbs,sizesOfSplits=[2,2]):
     probsForEachSplit = InputSplitter(inputProbs,sizesOfSplits)
     mutIn = 0
     for input,inputProb in enumerate(inputProbs):
