@@ -1,0 +1,44 @@
+import numpy as np
+from Input import Inputs
+
+def NoCorrelationInputsBetweenPairs(covs):
+    probsOfEachPair = []
+    amountOfPairs = len(covs)
+    amountOfNeurons = amountOfPairs*2
+    for cov in covs:
+        probsOfEachPair.append(Inputs(2,covariance=cov).ProbOfAllInputs())
+    probOfAllStates = np.ones(2**(amountOfNeurons))
+    for state in range(len(probOfAllStates)):
+        for pair in range(amountOfPairs):
+            probOfAllStates[state] *= probsOfEachPair[pair][(state>>(2*pair)) & 3]
+    return probOfAllStates
+
+def InputCombiner(firstPairProbs, relationToSecondPair, noiseInCorrelation = 0):
+    assert 0 <= noiseInCorrelation <= 1, f"noiseInCorrelation is supposed to be between 0 and 1, got {noiseInCorrelation}"
+    probOfBothInputs = np.zeros(relationToSecondPair.size)
+    for input in range(probOfBothInputs.size):
+        indexFirstPair = input & 3
+        indexSecondPair = input >> 2
+        probOfFirstPair = firstPairProbs[indexFirstPair]
+        cleanProbBothPairs = probOfFirstPair * relationToSecondPair[indexFirstPair,indexSecondPair]
+        noise = np.random.rand() / probOfBothInputs.size
+        probOfBothInputs[input] = (1-noiseInCorrelation) * cleanProbBothPairs + noiseInCorrelation*noise
+    probOfBothInputs /= np.sum(probOfBothInputs)
+    return probOfBothInputs
+
+def InputSplitter(inputProbs,sizesOfSplits=[2,2]):
+    probsForEachSplit = [np.zeros(2**size) for size in sizesOfSplits]
+    for input,inputProb in enumerate(inputProbs):
+        for splitInd,splitSize in enumerate(sizesOfSplits):
+            probsForEachSplit[splitInd][(input>>sum(sizesOfSplits[splitInd+1:])) & (2**splitSize - 1)] += inputProb
+    return probsForEachSplit
+
+def MutualInfromationOfInputs(inputProbs,sizesOfSplits=[2,2]):
+    probsForEachSplit = InputSplitter(inputProbs,sizesOfSplits)
+    mutIn = 0
+    for input,inputProb in enumerate(inputProbs):
+        multOfProbsOfSplits = 1
+        for splitInd,splitSize in enumerate(sizesOfSplits):
+            multOfProbsOfSplits *= probsForEachSplit[splitInd][(input>>sum(sizesOfSplits[splitInd+1:])) & (2**splitSize - 1)]
+        mutIn += inputProb * np.log(inputProb / multOfProbsOfSplits)
+    return mutIn
