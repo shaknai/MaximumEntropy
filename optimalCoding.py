@@ -1,10 +1,12 @@
 from aifc import Error
+from asyncio import BaseTransport
 import os
 import numpy as np
 import pandas as pd
 from scipy.stats import entropy
 from matplotlib import pyplot as plt
 from functools import lru_cache
+import itertools
 import tqdm
 from pymoo.algorithms.soo.nonconvex.pattern_search import PatternSearch
 from pymoo.factory import Himmelblau
@@ -16,23 +18,27 @@ class NeuronGroup:
     def __init__(self,numOfNeurons):
         self.beta = 1
         self.numOfNeurons = numOfNeurons
+        self.vHamiltonian = np.vectorize(self.HamiltonianOfState)
 
     def ProbOfState(self,state):
-        if isinstance(state,int):
-            state = self.NumToBitsArray(state)
-        if 0 in state:
-            state -= 0.5
-            state *= 2
         return np.e ** (self.beta * self.HamiltonianOfState(state))
 
+    def ProbOfStateFromHamiltonian(self,hamiltonian):
+        return np.exp(-self.beta * hamiltonian)
+
     def ProbOfAllStates(self):
-        res = np.zeros(2**self.numOfNeurons)
-        for state in range(2**self.numOfNeurons):
-            res[state] = self.ProbOfState(state)
+        hamiltonians = self.vHamiltonian(np.arange(2**self.numOfNeurons))
+        hamiltonians -= np.max(hamiltonians)
+        res = self.ProbOfStateFromHamiltonian(hamiltonians)
         res /= np.sum(res)
         return res
 
     def HamiltonianOfState(self, state):
+        if isinstance(state,int) or isinstance(state,np.int64):
+            state = self.NumToBitsArray(state)
+        if 0 in state:
+            state -= 0.5
+            state *= 2
         return (state @ self.H) + (state @ self.J @ state)
 
     def NumToBitsArray(self,num):
@@ -157,11 +163,13 @@ class NeuronsWithInputs:
     def MinusMutualInformationNeurons(self,J):
         return -self.MutualInformationNeurons(J)
 
-    def FindOptimalJPatternSearch(self,beta,covariance=0,inputProbs=None):
-        self.neuronGroup.beta = beta
-        self.inputs.covariance = covariance
+    def FindOptimalJPatternSearch(self,beta,covariance=None,inputProbs=None):
+        if beta:
+            self.neuronGroup.beta = beta
         if inputProbs:
-            self.inputs.inputProbs = inputProbs    
+            self.inputs.inputProbs = inputProbs 
+        if covariance:
+            self.inputs.covariance = covariance
         problem = ElementWiseMinEntropy(self)
         algorithm = PatternSearch()
         res = minimize(problem,algorithm,verbose=False,seed=1)
@@ -236,8 +244,22 @@ def MutualInfromationOfInputs(inputProbs,sizesOfSplits=[2,2]):
     
 
 
+def recreatingResult():
+    betas = np.arange(0.5,2,0.1)
+    covs = np.arange(-0.5,0.5,0.1)
+    res = np.zeros((betas.size,covs.size))
+    for i,beta in enumerate(betas):
+        for j,cov in enumerate(covs):
+            neuronsWithInputs = NeuronsWithInputs(numOfNeurons=2,covariance=cov)
+            optimalJSinglePair,MaximalEntropySinglePair =neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
+            res[i,j] = optimalJSinglePair
+    res -= np.min(res) - 1
+    plt.imshow(np.log(res))
+    plt.show()
+   
+
 def mainIndependentInputs():
-    beta = 0.5
+    beta = 10
     covs = [0.5]
     inputProbs = NoCorrelationInputsBetweenPairs(covs)
     neuronsWithInputs = NeuronsWithInputs(numOfNeurons=len(covs)*2,inputProbs=inputProbs)
@@ -247,6 +269,8 @@ def mainIndependentInputs():
     neuronsWithInputs = NeuronsWithInputs(numOfNeurons=len(covs)*2,inputProbs=inputProbs)
     optimalJTwoPairs,MaximalEntropyTwoPairs = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
     print(f"{MaximalEntropyTwoPairs}, {2*MaximalEntropySinglePair}")
+    print(f"Single pair J: {optimalJSinglePair}")
+    print(f"Two pairs J: {optimalJTwoPairs}")
 
 def mainDependentInputs():
     # firstPairProbs = NoCorrelationInputsBetweenPairs([0.5])
@@ -293,18 +317,44 @@ def mainDependentInputs():
     plt.title("Difference between mutin of inputs and mutIn of neurons")
 
 
+def mainSimilarityOfInputs():
+    beta = 0.1
+    dirName = f"{datetime.now().strftime('%d-%m-%Y_(%H:%M:%S)')}_beta_{beta}"
+    os.mkdir(f'logs/{dirName}')
+    cov1s = np.arange(0,1.1,0.5)
+    cov2s = np.arange(0,1.1,0.5)
+    deltaInMutualInformation = []
+    for covs in tqdm.tqdm(itertools.product(cov1s, cov2s)):
+        inputProbs = NoCorrelationInputsBetweenPairs(covs)
+        neuronsWithInputs = NeuronsWithInputs(numOfNeurons=4,inputProbs=inputProbs)
+        optimalJBoth,MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
+        inputProbsFirstPair , inputProbsSecondPair = InputSplitter(inputProbs=inputProbs)
 
-    
+        neuronsWithInputsFirst = NeuronsWithInputs(numOfNeurons=2,inputProbs=inputProbsFirstPair)
+        neuronsWithInputsSecond = NeuronsWithInputs(numOfNeurons=2,inputProbs=inputProbsSecondPair)
+        optimalJFirst,MaximalEntropyFirst = neuronsWithInputsFirst.FindOptimalJPatternSearch(beta=beta)
+        optimalJSecond,MaximalEntropySecond = neuronsWithInputsSecond.FindOptimalJPatternSearch(beta=beta)
+        deltaInMutualInformation.append(MaximalEntropyFirst + MaximalEntropySecond - MaximalEntropyBoth)
+    deltaInMutualInformation = np.array(deltaInMutualInformation).reshape((cov1s.size,cov2s.size))
+    plt.imshow(deltaInMutualInformation)
+    plt.show()
 
-
-    # print(f"Maximal mutual information of inputs with noise {noiseInCorrelation}: {MaximalEntropyBoth}")
-    
 def checkingInputCombiner():
     firstPairProbs = Inputs(2,covariance=1).ProbOfAllInputs()
     relationToSecondPair = np.random.rand(firstPairProbs.size,firstPairProbs.size)
     noiseInCorrelation = 1
     plt.plot(InputCombiner(firstPairProbs,relationToSecondPair,noiseInCorrelation))
     plt.show()
+
+def checkingHighBeta():
+    beta = 10
+    inputProbs = NoCorrelationInputsBetweenPairs([0,0.5])
+    # inputProbs = np.zeros(16)
+    # inputProbs[0] = 1
+    neuronsWithInputs = NeuronsWithInputs(numOfNeurons=4,inputProbs=inputProbs)
+    optimalJBoth,MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
+    print(optimalJBoth)
+       
 
 def checkingInputSplitter():
     # inputProbs = NoCorrelationInputsBetweenPairs([0.5])
@@ -322,11 +372,21 @@ def checkingMutualInformation():
     plt.plot(noiseAmounts,mutualInformationInputs)
     plt.show()
 
-
+def checkingNeuronGroup():
+    ngroup = NeuronGroup(2)
+    ngroup.H = np.array([1,-1])
+    ngroup.J = np.zeros((2,2))
+    ngroup.beta = 1
+    print(ngroup.ProbOfAllStates())
 
 if __name__ == '__main__':
     # main()
-    mainDependentInputs()
+    # mainDependentInputs()
+    # checkingHighBeta()
+    # checkingNeuronGroup()
+    # mainIndependentInputs()
+    recreatingResult()
+    # mainSimilarityOfInputs()
     # checkingMutualInformation()
     # checkingInputCombiner()
     # checkingInputSplitter()
