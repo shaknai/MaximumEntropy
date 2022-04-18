@@ -31,6 +31,9 @@ class NeuronGroup:
         hamiltonians -= np.max(hamiltonians)
         res = self.ProbOfStateFromHamiltonian(hamiltonians)
         res /= np.sum(res)
+        # CUTOFF = 10**(-7)
+        # res[res < CUTOFF] = 0
+        # res /= np.sum(res)
         return res
 
     def HamiltonianOfState(self, state):
@@ -259,12 +262,12 @@ def recreatingResult():
    
 
 def mainIndependentInputs():
-    beta = 10
-    covs = [0.5]
+    beta = 50
+    covs = [0.1]
     inputProbs = NoCorrelationInputsBetweenPairs(covs)
     neuronsWithInputs = NeuronsWithInputs(numOfNeurons=len(covs)*2,inputProbs=inputProbs)
     optimalJSinglePair,MaximalEntropySinglePair =neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
-    covs = [0.5,0.5]
+    covs = [0.1,0.1]
     inputProbs = NoCorrelationInputsBetweenPairs(covs)
     neuronsWithInputs = NeuronsWithInputs(numOfNeurons=len(covs)*2,inputProbs=inputProbs)
     optimalJTwoPairs,MaximalEntropyTwoPairs = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
@@ -347,14 +350,22 @@ def checkingInputCombiner():
     plt.show()
 
 def checkingHighBeta():
-    beta = 10
-    inputProbs = NoCorrelationInputsBetweenPairs([0,0.5])
-    # inputProbs = np.zeros(16)
-    # inputProbs[0] = 1
-    neuronsWithInputs = NeuronsWithInputs(numOfNeurons=4,inputProbs=inputProbs)
-    optimalJBoth,MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
-    print(optimalJBoth)
-       
+    betas = np.arange(1,20,1)
+    # betas = np.array([9])
+    res= np.zeros(betas.size)
+    res2= np.zeros(betas.size)
+    for i,beta in enumerate(betas):
+        covs = [0.1]
+        inputProbs = NoCorrelationInputsBetweenPairs(covs)
+        neuronsWithInputs = NeuronsWithInputs(numOfNeurons=len(covs)*2,inputProbs=inputProbs)
+        optimalJSinglePair,MaximalEntropySinglePair =neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
+        res[i] = optimalJSinglePair[0]
+        res2[i] = MaximalEntropySinglePair[0]
+    plt.plot(res2)
+    plt.show()
+    #For very high beta, the J barely matters, 
+    #as long as it's smaller in size than the input the resulting output will 
+    #be the same as the input.   
 
 def checkingInputSplitter():
     # inputProbs = NoCorrelationInputsBetweenPairs([0.5])
@@ -382,10 +393,10 @@ def checkingNeuronGroup():
 if __name__ == '__main__':
     # main()
     # mainDependentInputs()
-    # checkingHighBeta()
+    checkingHighBeta()
     # checkingNeuronGroup()
     # mainIndependentInputs()
-    recreatingResult()
+    # recreatingResult()
     # mainSimilarityOfInputs()
     # checkingMutualInformation()
     # checkingInputCombiner()
