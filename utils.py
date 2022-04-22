@@ -1,5 +1,6 @@
 import numpy as np
 from Input import Inputs
+from NeuronsWithInputs import NeuronsWithInputs
 
 def NoCorrelationInputsBetweenPairs(covs):
     probsOfEachPair = []
@@ -42,3 +43,18 @@ def MutualInformationOfInputs(inputProbs,sizesOfSplits=[2,2]):
             multOfProbsOfSplits *= probsForEachSplit[splitInd][(input>>sum(sizesOfSplits[splitInd+1:])) & (2**splitSize - 1)]
         mutIn += inputProb * np.log(inputProb / multOfProbsOfSplits)
     return mutIn
+
+def EffectivenessOfConnecting(inputProbs,beta,mutinInputs = None,numOfNeurons=4):
+    neuronsWithInputs = NeuronsWithInputs(numOfNeurons=numOfNeurons,inputProbs=inputProbs)
+    optimalJBoth,MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
+    inputProbsFirstPair , inputProbsSecondPair = InputSplitter(inputProbs=inputProbs)
+
+    neuronsWithInputsFirst = NeuronsWithInputs(numOfNeurons=2,inputProbs=inputProbsFirstPair)
+    neuronsWithInputsSecond = NeuronsWithInputs(numOfNeurons=2,inputProbs=inputProbsSecondPair)
+    optimalJFirst,MaximalEntropyFirst = neuronsWithInputsFirst.FindOptimalJPatternSearch(beta=beta)
+    optimalJSecond,MaximalEntropySecond = neuronsWithInputsSecond.FindOptimalJPatternSearch(beta=beta)
+    
+    if mutinInputs is None:
+        mutinInputs = MutualInformationOfInputs(inputProbs)
+    return mutinInputs + MaximalEntropyBoth - MaximalEntropyFirst - MaximalEntropySecond
+    

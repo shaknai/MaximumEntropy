@@ -40,16 +40,21 @@ def mainIndependentInputs():
 def mainDependentInputsDifferentBetas():
     dirName = f"{datetime.now().strftime('%d-%m-%Y_(%H:%M:%S)')}_different_betas"
     mkdir(f'logs/{dirName}')
-    betas = np.arange(1,5)
+    betas = np.arange(0.1,2,0.2)
+    # betas = np.arange(0.1,2,1.7)
     cleanProbs = NoCorrelationInputsBetweenPairs([0.5,0.5])
     noisyProbs = np.random.rand(cleanProbs.size)
     noisyProbs /= sum(noisyProbs)
     noiseAmounts = np.arange(0,1,0.1)
+    # noiseAmounts = np.arange(0,1,1.6)
     res = np.zeros((noiseAmounts.size,betas.size))
+    pbar = tqdm.tqdm(total= noiseAmounts.size*betas.size)
+    mutinInputsList = np.zeros(len(noiseAmounts))
     for i,noiseAmount in enumerate(noiseAmounts):
         inputProbs = (1-noiseAmount)*cleanProbs + noiseAmount*noisyProbs
         inputProbs /= sum(inputProbs)
         mutinInputs = MutualInformationOfInputs(inputProbs)
+        mutinInputsList[i] = mutinInputs
         deltaInMutualInformationNeuronsPerNoise = []
         for j,beta in enumerate(betas):
             neuronsWithInputs = NeuronsWithInputs(numOfNeurons=4,inputProbs=inputProbs)
@@ -62,11 +67,54 @@ def mainDependentInputsDifferentBetas():
             optimalJSecond,MaximalEntropySecond = neuronsWithInputsSecond.FindOptimalJPatternSearch(beta=beta)
             deltaInMutualInformationNeuronsPerNoise.append(MaximalEntropyFirst + MaximalEntropySecond - MaximalEntropyBoth)
             res[i,j] = mutinInputs - deltaInMutualInformationNeuronsPerNoise[-1]
+            pbar.update(1)
     # plt.plot(betas,MutualInformationOfInputs(inputProbs) -  deltaInMutualInformationNeuronsPerNoise,'o')
-    plt.imshow(res)
+    pbar.close()
+    fig,ax = plt.subplots()
+    ax.imshow(res)
+    ax.set_xticks(list(range(len(betas))))
+    ax.set_xticklabels(betas)
+
+    # plt.Axes.set_xlim(betas[0],betas[-1])
+    ax.set_yticks(list(range(len(mutinInputsList))))
+    ax.set_yticklabels(mutinInputsList)
+    # plt.Axes.set_yticks(list(range(len(mutinInputs))),mutinInputs)
+    # plt.xlabel('Beta')
+    ax.set_xlabel('Beta')
+    ax.set_ylabel('Mutual Information of pairs of inputs')
+    ax.set_title('Effectiveness of Connecting Time Frames')
     plt.savefig(f'logs/{dirName}/Mutual_information_by_connecting_time_frames_beta_{beta}.png')
-    plt.xlabel('Beta')
-    plt.ylabel('Mutual Information of pairs of inputs')
+    plt.show()
+
+def mainDifferentInputSameBeta():
+    dirName = f"{datetime.now().strftime('%d-%m-%Y_(%H:%M:%S)')}_different_inputs"
+    mkdir(f'logs/{dirName}')
+    fig,ax = plt.subplots()
+    betas = np.logspace(-1,1,10)
+    cleanProbs = NoCorrelationInputsBetweenPairs([0.5,0.5])
+    noisyProbs = np.random.rand(cleanProbs.size)
+    noisyProbs /= sum(noisyProbs)
+    noiseAmounts = np.arange(0,1,0.1)
+    for i,beta in enumerate(betas):
+        effectiveness = np.zeros(noiseAmounts.size)
+        print(f"beta = {beta}, ({i},{len(betas)})")
+        pbar = tqdm.tqdm(total= noiseAmounts.size)
+        mutinInputsList = np.zeros(len(noiseAmounts))
+        for i,noiseAmount in enumerate(noiseAmounts):
+            inputProbs = (1-noiseAmount)*cleanProbs + noiseAmount*noisyProbs
+            inputProbs /= sum(inputProbs)
+            mutinInputs = MutualInformationOfInputs(inputProbs)
+            mutinInputsList[i] = mutinInputs
+            effectiveness[i] = EffectivenessOfConnecting(inputProbs,beta,mutinInputs=mutinInputs)
+            pbar.update(1)
+        # plt.plot(betas,MutualInformationOfInputs(inputProbs) -  deltaInMutualInformationNeuronsPerNoise,'o')
+        pbar.close()
+        ax.plot(mutinInputsList,effectiveness,'o')
+    ax.legend(betas)
+    ax.set_xlabel('Mutual Information of pairs of inputs')
+    ax.set_ylabel('Effectivness of connecting pairs')
+    ax.set_title(f'Effectiveness of Connecting Time Frames for different betas')
+    plt.savefig(f'logs/{dirName}/Mutual_information_by_connecting_time_frames_beta_{beta}.png')
     plt.show()
 
 def mainDependentInputs():
@@ -187,7 +235,8 @@ def checkingNeuronGroup():
 if __name__ == '__main__':
     # mainDependentInputs()
     # mainSimilarityOfInputs()
-    mainDependentInputsDifferentBetas()
+    # mainDependentInputsDifferentBetas()
+    mainDifferentInputSameBeta()
     # checkingNeuronGroup()
     # mainIndependentInputs()
     # recreatingResult()
