@@ -117,6 +117,48 @@ def mainDifferentInputSameBeta():
     plt.savefig(f'logs/{dirName}/Mutual_information_by_connecting_time_frames_beta_{beta}.png')
     plt.show()
 
+def mainDifferentNoise():
+    # # evenly sampled time at 200ms intervals
+    # t = np.arange(0., 5., 0.2)
+
+    # # red dashes, blue squares and green triangles
+    # plt.plot(t, t, 'r--', t, t**2, 'bs', t, t**3, 'g^')
+    # plt.show()
+    # return
+    dirName = f"{datetime.now().strftime('%d-%m-%Y_(%H:%M:%S)')}_different_noises"
+    mkdir(f'logs/{dirName}')
+    # fig,ax = plt.subplots()
+    beta = 1
+    cleanProbs = NoCorrelationInputsBetweenPairs([0.5,0.5])
+    amountOfRuns = 10
+    plt.figure()
+    for i in range(amountOfRuns):
+        np.random.seed()
+        noisyProbs = np.random.rand(cleanProbs.size)
+        print(np.sum(noisyProbs))
+        noisyProbs /= sum(noisyProbs)
+        noiseAmounts = np.arange(0.1,1,0.1) #Changed this to be far from zero mutin.
+        effectiveness = np.zeros(noiseAmounts.size)
+        print(f"Run {i+1} out of: {amountOfRuns}")
+        pbar = tqdm.tqdm(total= noiseAmounts.size)
+        mutinInputsList = np.zeros(len(noiseAmounts))
+        for i,noiseAmount in enumerate(noiseAmounts):
+            inputProbs = (1-noiseAmount)*cleanProbs + noiseAmount*noisyProbs
+            inputProbs /= sum(inputProbs)
+            mutinInputs = MutualInformationOfInputs(inputProbs)
+            mutinInputsList[i] = mutinInputs
+            effectiveness[i] = EffectivenessOfConnecting(inputProbs,beta,mutinInputs=mutinInputs)
+            pbar.update(1)
+        plt.plot(mutinInputsList,effectiveness/mutinInputsList,'o')
+        pbar.close()
+    # ax.plot(ratios)
+    plt.xlabel('Mutual information of inputs')
+    plt.ylabel('Effectivness of connecting pairs')
+    plt.title(f'Effectiveness of Connecting Time Frames for different noise divided by mutin')
+    plt.savefig(f'logs/{dirName}/Mutual_information_by_connecting_time_frames_different_noise.png')
+    plt.show()
+
+
 def mainDependentInputs():
     # firstPairProbs = NoCorrelationInputsBetweenPairs([0.5])
     # relationToSecondPair = np.random.rand(firstPairProbs.size,firstPairProbs.size)
@@ -236,7 +278,8 @@ if __name__ == '__main__':
     # mainDependentInputs()
     # mainSimilarityOfInputs()
     # mainDependentInputsDifferentBetas()
-    mainDifferentInputSameBeta()
+    # mainDifferentInputSameBeta()
+    mainDifferentNoise()
     # checkingNeuronGroup()
     # mainIndependentInputs()
     # recreatingResult()
