@@ -14,11 +14,14 @@ def recreatingResult():
     betas = np.arange(0.5,2,0.1)
     covs = np.arange(-0.5,0.5,0.1)
     res = np.zeros((betas.size,covs.size))
+    pbar = tqdm.tqdm(total=betas.size*covs.size)
     for i,beta in enumerate(betas):
         for j,cov in enumerate(covs):
             neuronsWithInputs = NeuronsWithInputs(numOfNeurons=2,covariance=cov)
             optimalJSinglePair,MaximalEntropySinglePair =neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
             res[i,j] = optimalJSinglePair
+            pbar.update(1)
+    pbar.close()
     res -= np.min(res) - 1
     plt.imshow(np.log(res))
     plt.show()

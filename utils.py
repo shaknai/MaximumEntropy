@@ -89,5 +89,4 @@ def EffectivenessOfConnecting(inputProbs,beta,mutinInputs = None,numOfNeurons=4)
     # print(MutinBoth)
     if mutinInputs is None:
         mutinInputs = MutualInformationOfInputs(inputProbs)
-    return mutinInputs + MaximalEntropyBoth - MaximalEntropyFirst - MaximalEntropySecond
-    
+    return MaximalEntropyBoth - MutinBoth    
