@@ -41,51 +41,46 @@ def mainIndependentInputs():
     print(f"Two pairs J: {optimalJTwoPairs}")
 
 def mainDependentInputsDifferentBetas():
+    betas = np.arange(0.1,2,0.2)
+    noiseAmounts = np.arange(0,1,0.1)
+    numOfNeurons = 4
+
     dirName = f"{datetime.now().strftime('%d-%m-%Y_(%H:%M:%S)')}_different_betas"
     mkdir(f'logs/{dirName}')
-    betas = np.arange(0.1,2,0.2)
-    # betas = np.arange(0.1,2,1.7)
+
     cleanProbs = NoCorrelationInputsBetweenPairs([0.5,0.5])
     noisyProbs = np.random.rand(cleanProbs.size)
     noisyProbs /= sum(noisyProbs)
-    noiseAmounts = np.arange(0,1,0.1)
-    # noiseAmounts = np.arange(0,1,1.6)
-    res = np.zeros((noiseAmounts.size,betas.size))
-    pbar = tqdm.tqdm(total= noiseAmounts.size*betas.size)
     mutinInputsList = np.zeros(len(noiseAmounts))
+    res = np.zeros((noiseAmounts.size,betas.size))
+
+    pbar = tqdm.tqdm(total= noiseAmounts.size*betas.size)
+
     for i,noiseAmount in enumerate(noiseAmounts):
         inputProbs = (1-noiseAmount)*cleanProbs + noiseAmount*noisyProbs
         inputProbs /= sum(inputProbs)
         mutinInputs = MutualInformationOfInputs(inputProbs)
         mutinInputsList[i] = mutinInputs
-        deltaInMutualInformationNeuronsPerNoise = []
+        # deltaInMutualInformationNeuronsPerNoise = []
         for j,beta in enumerate(betas):
-            neuronsWithInputs = NeuronsWithInputs(numOfNeurons=4,inputProbs=inputProbs)
-            optimalJBoth,MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
-            inputProbsFirstPair , inputProbsSecondPair = InputSplitter(inputProbs=inputProbs)
-
-            neuronsWithInputsFirst = NeuronsWithInputs(numOfNeurons=2,inputProbs=inputProbsFirstPair)
-            neuronsWithInputsSecond = NeuronsWithInputs(numOfNeurons=2,inputProbs=inputProbsSecondPair)
-            optimalJFirst,MaximalEntropyFirst = neuronsWithInputsFirst.FindOptimalJPatternSearch(beta=beta)
-            optimalJSecond,MaximalEntropySecond = neuronsWithInputsSecond.FindOptimalJPatternSearch(beta=beta)
-            deltaInMutualInformationNeuronsPerNoise.append(MaximalEntropyFirst + MaximalEntropySecond - MaximalEntropyBoth)
-            res[i,j] = mutinInputs - deltaInMutualInformationNeuronsPerNoise[-1]
+            #TODO: Use EfficiancyOfInputs here.
+            res[i,j] = EffectivenessOfConnecting(inputProbs,beta,numOfNeurons)
             pbar.update(1)
-    # plt.plot(betas,MutualInformationOfInputs(inputProbs) -  deltaInMutualInformationNeuronsPerNoise,'o')
     pbar.close()
+
     fig,ax = plt.subplots()
     ax.imshow(res)
+
     ax.set_xticks(list(range(len(betas))))
     ax.set_xticklabels(betas)
 
-    # plt.Axes.set_xlim(betas[0],betas[-1])
     ax.set_yticks(list(range(len(mutinInputsList))))
     ax.set_yticklabels(mutinInputsList)
-    # plt.Axes.set_yticks(list(range(len(mutinInputs))),mutinInputs)
-    # plt.xlabel('Beta')
+
     ax.set_xlabel('Beta')
     ax.set_ylabel('Mutual Information of pairs of inputs')
     ax.set_title('Effectiveness of Connecting Time Frames')
+
     plt.savefig(f'logs/{dirName}/Mutual_information_by_connecting_time_frames_beta_{beta}.png')
     plt.show()
 
@@ -98,9 +93,9 @@ def mainDifferentInputSameBeta():
     noisyProbs = np.random.rand(cleanProbs.size)
     noisyProbs /= sum(noisyProbs)
     noiseAmounts = np.arange(0,1,0.1)
-    for i,beta in enumerate(betas):
+    for j,beta in enumerate(betas):
         effectiveness = np.zeros(noiseAmounts.size)
-        print(f"beta = {beta}, ({i},{len(betas)})")
+        print(f"beta = {beta}, ({j},{len(betas)})")
         pbar = tqdm.tqdm(total= noiseAmounts.size)
         mutinInputsList = np.zeros(len(noiseAmounts))
         for i,noiseAmount in enumerate(noiseAmounts):
@@ -161,7 +156,6 @@ def mainDifferentNoise():
     plt.savefig(f'logs/{dirName}/Mutual_information_by_connecting_time_frames_different_noise.png')
     plt.show()
 
-
 def mainDependentInputs():
     # firstPairProbs = NoCorrelationInputsBetweenPairs([0.5])
     # relationToSecondPair = np.random.rand(firstPairProbs.size,firstPairProbs.size)
@@ -198,14 +192,6 @@ def mainDependentInputs():
     plt.ylabel('Mutual infromation difference gained')
     # plt.savefig(f'logs/{dirName}/Mutual_information_by_connecting_time_frames_beta_{beta}.png')
     plt.show()
-    # mutualInformationInputs = np.array(mutualInformationInputs)
-    # deltaInMutualInformationNeuronsPerNoise = np.array(deltaInMutualInformationNeuronsPerNoise)
-    # mutualInformationInputs = mutualInformationInputs.reshape(deltaInMutualInformationNeuronsPerNoise.shape)
-    # pd.DataFrame([{'mutualInformationInputs':mutualInformationInputs,'deltaInMutualInformationNeuronsPerNoise':deltaInMutualInformationNeuronsPerNoise}]).to_csv(f'logs/{dirName}/mutins.csv')
-
-    # plt.plot(mutualInformationInputs - deltaInMutualInformationNeuronsPerNoise,'o')
-    # plt.show()
-    # plt.title("Difference between mutin of inputs and mutIn of neurons")
 
 def mainSimilarityOfInputs():
     beta = 0.1
@@ -229,66 +215,13 @@ def mainSimilarityOfInputs():
     plt.imshow(deltaInMutualInformation)
     plt.show()
 
-def checkingInputCombiner():
-    firstPairProbs = Inputs(2,covariance=1).ProbOfAllInputs()
-    relationToSecondPair = np.random.rand(firstPairProbs.size,firstPairProbs.size)
-    noiseInCorrelation = 1
-    plt.plot(InputCombiner(firstPairProbs,relationToSecondPair,noiseInCorrelation))
-    plt.show()
-
-def checkingHighBeta():
-    betas = np.arange(1,20,1)
-    # betas = np.array([9])
-    res= np.zeros(betas.size)
-    res2= np.zeros(betas.size)
-    for i,beta in enumerate(betas):
-        covs = [0.1]
-        inputProbs = NoCorrelationInputsBetweenPairs(covs)
-        neuronsWithInputs = NeuronsWithInputs(numOfNeurons=len(covs)*2,inputProbs=inputProbs)
-        optimalJSinglePair,MaximalEntropySinglePair =neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
-        res[i] = optimalJSinglePair[0]
-        res2[i] = MaximalEntropySinglePair[0]
-    plt.plot(res2)
-    plt.show()
-    #For very high beta, the J barely matters, 
-    #as long as it's smaller in size than the input the resulting output will 
-    #be the same as the input.   
-
-def checkingInputSplitter():
-    # inputProbs = NoCorrelationInputsBetweenPairs([0.5])
-    inputProbs = np.array([0,1,0,0])
-    print(InputSplitter(inputProbs,[1,1]))
-
-def checkingMutualInformation():
-    cleanProbs = NoCorrelationInputsBetweenPairs([0.5,0.5])
-    noisyProbs = np.random.rand(cleanProbs.size)
-    noiseAmounts = np.arange(0,1,0.01)
-    mutualInformationInputs = []
-    for noiseAmount in tqdm.tqdm(noiseAmounts):
-        inputProbs = (1-noiseAmount)*cleanProbs + noiseAmount*noisyProbs
-        mutualInformationInputs.append(MutualInformationOfInputs(inputProbs))
-    plt.plot(noiseAmounts,mutualInformationInputs)
-    plt.show()
-
-def checkingNeuronGroup():
-    ngroup = NeuronGroup(2)
-    ngroup.H = np.array([1,-1])
-    ngroup.J = np.zeros((2,2))
-    ngroup.beta = 1
-    print(ngroup.ProbOfAllStates())
-
-def checkingJCombiner():
-    a = [1,2,3,4,5,6]
-    b = [7]
-    c = [8]
-    print(JCombiner(a,b,c))
 
 if __name__ == '__main__':
     # mainDependentInputs()
     # mainSimilarityOfInputs()
-    # mainDependentInputsDifferentBetas()
+    mainDependentInputsDifferentBetas()
     # mainDifferentInputSameBeta()
-    mainDifferentNoise()
+    # mainDifferentNoise()
     # checkingJCombiner()
     # checkingNeuronGroup()
     # mainIndependentInputs()
