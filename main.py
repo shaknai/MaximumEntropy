@@ -274,12 +274,18 @@ def checkingNeuronGroup():
     ngroup.beta = 1
     print(ngroup.ProbOfAllStates())
 
+def checkingJCombiner():
+    a = np.zeros((2,2))
+    b = np.ones((3,3))
+    print(JCombiner(a,b,a))
+
 if __name__ == '__main__':
     # mainDependentInputs()
     # mainSimilarityOfInputs()
     # mainDependentInputsDifferentBetas()
     # mainDifferentInputSameBeta()
     mainDifferentNoise()
+    # checkingJCombiner()
     # checkingNeuronGroup()
     # mainIndependentInputs()
     # recreatingResult()

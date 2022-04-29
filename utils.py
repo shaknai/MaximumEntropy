@@ -15,7 +15,7 @@ def NoCorrelationInputsBetweenPairs(covs):
     return probOfAllStates
 
 def InputCombiner(firstPairProbs, relationToSecondPair, noiseInCorrelation = 0):
-    assert 0 <= noiseInCorrelation <= 1, f"noiseInCorrelation is supposed to be between 0 and 1, got {noiseInCorrelation}"
+    # assert 0 <= noiseInCorrelation <= 1, f"noiseInCorrelation is supposed to be between 0 and 1, got {noiseInCorrelation}"
     probOfBothInputs = np.zeros(relationToSecondPair.size)
     for input in range(probOfBothInputs.size):
         indexFirstPair = input & 3
@@ -44,9 +44,23 @@ def MutualInformationOfInputs(inputProbs,sizesOfSplits=[2,2]):
         mutIn += inputProb * np.log(inputProb / multOfProbsOfSplits)
     return mutIn
 
+def JCombiner(*args):
+    totalLen = 0
+    for J in args:
+        totalLen += J.shape[0]
+    totalJ = np.zeros((totalLen,totalLen))
+    curInd = 0
+    for J in args:
+        nextInd = curInd + J.shape[0]
+        totalJ[curInd:nextInd,curInd:nextInd] = J
+        curInd = nextInd
+    return totalJ
+        
+
+
 def EffectivenessOfConnecting(inputProbs,beta,mutinInputs = None,numOfNeurons=4):
     neuronsWithInputs = NeuronsWithInputs(numOfNeurons=numOfNeurons,inputProbs=inputProbs)
-    optimalJBoth,MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
+    optimalJBoth,   MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
     inputProbsFirstPair , inputProbsSecondPair = InputSplitter(inputProbs=inputProbs)
 
     neuronsWithInputsFirst = NeuronsWithInputs(numOfNeurons=2,inputProbs=inputProbsFirstPair)
