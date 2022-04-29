@@ -275,9 +275,10 @@ def checkingNeuronGroup():
     print(ngroup.ProbOfAllStates())
 
 def checkingJCombiner():
-    a = np.zeros((2,2))
-    b = np.ones((3,3))
-    print(JCombiner(a,b,a))
+    a = [1,2,3,4,5,6]
+    b = [7]
+    c = [8]
+    print(JCombiner(a,b,c))
 
 if __name__ == '__main__':
     # mainDependentInputs()

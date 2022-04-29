@@ -1,3 +1,4 @@
+import enum
 import numpy as np
 from Input import Inputs
 from NeuronsWithInputs import NeuronsWithInputs
@@ -45,19 +46,33 @@ def MutualInformationOfInputs(inputProbs,sizesOfSplits=[2,2]):
     return mutIn
 
 def JCombiner(*args):
-    totalLen = 0
+    totalAmountOfNeurons = 0
     for J in args:
-        totalLen += J.shape[0]
-    totalJ = np.zeros((totalLen,totalLen))
-    curInd = 0
+        amountOfNeurons = int(np.round((1+(1+8*len(J))**0.5)/2))
+        totalAmountOfNeurons += amountOfNeurons
+    totalJ = np.zeros(totalAmountOfNeurons*(totalAmountOfNeurons - 1)//2)
+    amountOfPreviousNeurons = 0
+    totalInd = 0
     for J in args:
-        nextInd = curInd + J.shape[0]
-        totalJ[curInd:nextInd,curInd:nextInd] = J
-        curInd = nextInd
+        currentAmountOfNeurons = int(np.round((1+(1+8*len(J))**0.5)/2))
+        firstNeuronInd = 0
+        secondNeuronInd = firstNeuronInd + 1
+        for connection in J:
+            totalJ[totalInd] = connection
+            totalInd += 1
+            secondNeuronInd += 1
+            if secondNeuronInd == currentAmountOfNeurons:
+                for _ in range(totalAmountOfNeurons - (amountOfPreviousNeurons + currentAmountOfNeurons)):
+                    totalJ[totalInd] = 0
+                    totalInd += 1
+                firstNeuronInd += 1
+                secondNeuronInd = firstNeuronInd + 1
+        amountOfPreviousNeurons += currentAmountOfNeurons
+        for _ in range(totalAmountOfNeurons - amountOfPreviousNeurons):
+            totalJ[totalInd] = 0
+            totalInd += 1
     return totalJ
         
-
-
 def EffectivenessOfConnecting(inputProbs,beta,mutinInputs = None,numOfNeurons=4):
     neuronsWithInputs = NeuronsWithInputs(numOfNeurons=numOfNeurons,inputProbs=inputProbs)
     optimalJBoth,   MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
@@ -68,6 +83,10 @@ def EffectivenessOfConnecting(inputProbs,beta,mutinInputs = None,numOfNeurons=4)
     optimalJFirst,MaximalEntropyFirst = neuronsWithInputsFirst.FindOptimalJPatternSearch(beta=beta)
     optimalJSecond,MaximalEntropySecond = neuronsWithInputsSecond.FindOptimalJPatternSearch(beta=beta)
     
+    optimalJCombined = JCombiner(optimalJFirst,optimalJSecond)
+    neuronsWithInputs = NeuronsWithInputs(numOfNeurons=numOfNeurons,inputProbs=inputProbs)
+    MutinBoth = neuronsWithInputs.MutualInformationNeurons(optimalJCombined)
+    # print(MutinBoth)
     if mutinInputs is None:
         mutinInputs = MutualInformationOfInputs(inputProbs)
     return mutinInputs + MaximalEntropyBoth - MaximalEntropyFirst - MaximalEntropySecond
