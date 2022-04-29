@@ -73,19 +73,16 @@ def JCombiner(*args):
             totalInd += 1
     return totalJ
         
-def EffectivenessOfConnecting(inputProbs,beta,mutinInputs = None,numOfNeurons=4):
+def EffectivenessOfConnecting(inputProbs,beta,numOfNeurons=4):
     neuronsWithInputs = NeuronsWithInputs(numOfNeurons=numOfNeurons,inputProbs=inputProbs)
     optimalJBoth,   MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
-    inputProbsFirstPair , inputProbsSecondPair = InputSplitter(inputProbs=inputProbs)
 
+    inputProbsFirstPair , inputProbsSecondPair = InputSplitter(inputProbs=inputProbs)
     neuronsWithInputsFirst = NeuronsWithInputs(numOfNeurons=2,inputProbs=inputProbsFirstPair)
     neuronsWithInputsSecond = NeuronsWithInputs(numOfNeurons=2,inputProbs=inputProbsSecondPair)
     optimalJFirst,MaximalEntropyFirst = neuronsWithInputsFirst.FindOptimalJPatternSearch(beta=beta)
     optimalJSecond,MaximalEntropySecond = neuronsWithInputsSecond.FindOptimalJPatternSearch(beta=beta)
     
     optimalJCombined = JCombiner(optimalJFirst,optimalJSecond)
-    neuronsWithInputs = NeuronsWithInputs(numOfNeurons=numOfNeurons,inputProbs=inputProbs)
-    MutinBoth = neuronsWithInputs.MutualInformationNeurons(optimalJCombined)
-    if mutinInputs is None:
-        mutinInputs = MutualInformationOfInputs(inputProbs)
+    MutinBoth = neuronsWithInputs.MutualInformationNeurons(optimalJCombined,beta=beta)
     return MaximalEntropyBoth - MutinBoth    
