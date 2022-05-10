@@ -243,13 +243,45 @@ def mainSymmetricAndAntisymmetricNoise():
     plt.savefig(f'logs/{dirName}/Mutual_information_by_connecting_time_frames_different_symmetry_noise.png')
     plt.show()
 
+def mainSymmetryInPairsNoise():
+    dirName = f"{datetime.now().strftime('%d-%m-%Y_(%H:%M:%S)')}_different_symmetry_of_noise"
+    mkdir(f'logs/{dirName}')
+    beta = 1
+    cleanProbs = NoCorrelationInputsBetweenPairs([0.5,0.5])
+    amountsOfSymmetry = np.arange(0,1.05,0.1)
+    plt.figure()
+    noisyProbs = np.random.rand(cleanProbs.size)
+    noisyProbs /= sum(noisyProbs)
+    for epoch,amountOfSymmetry in enumerate(amountsOfSymmetry):
+        noisyProbsAfterSymmetrizing = ContinuousSymmetryInPairs(noisyProbs,amountOfSymmetry)
+        noiseAmounts = np.arange(0.1,1,0.1) #Changed this to be far from zero mutin.
+        effectiveness = np.zeros(noiseAmounts.size)
+        print(f"Run {epoch+1} out of: {amountsOfSymmetry.size}")
+        pbar = tqdm.tqdm(total= noiseAmounts.size)
+        mutinInputsList = np.zeros(len(noiseAmounts))
+        for i,noiseAmount in enumerate(noiseAmounts):
+            inputProbs = (1-noiseAmount)*cleanProbs + noiseAmount*noisyProbsAfterSymmetrizing
+            inputProbs /= sum(inputProbs)
+            mutinInputs = MutualInformationOfInputs(inputProbs)
+            mutinInputsList[i] = mutinInputs
+            effectiveness[i] = EffectivenessOfConnecting(inputProbs,beta)
+            pbar.update(1)
+        plt.plot(mutinInputsList,effectiveness/mutinInputsList,'o-')
+        pbar.close()
+    # ax.plot(ratios)
+    plt.legend(amountsOfSymmetry)
+    plt.xlabel('Mutual information of inputs')
+    plt.ylabel('Effectivness of connecting pairs divided by Mutin of inputs')
+    plt.title(f'Effectiveness of Connecting Time Frames for different in-pair symmetry noise')
+    plt.savefig(f'logs/{dirName}/Mutual_information_by_connecting_time_frames_different_in_pair_symmetry_noise.png')
+    plt.show()
 
 if __name__ == '__main__':
     # mainDependentInputs()
     # mainSimilarityOfInputs()
     # mainDependentInputsDifferentBetas()
-    mainSymmetricAndAntisymmetricNoise()
-
+    # mainSymmetricAndAntisymmetricNoise()
+    mainSymmetryInPairsNoise()
     # mainDifferentInputSameBeta()
     # mainDifferentNoise()
     # checkingJCombiner()
