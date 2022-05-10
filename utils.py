@@ -109,3 +109,6 @@ def SymmetrizeNoiseInPairs(noiseProbs):
         res[i] = noiseProbs[i] + noiseProbs[twinI]
     return res
 
+def ContinuousSymmetryInPairs(noiseProbs,amountOfSymmetry):
+    assert 0 <= amountOfSymmetry <= 1, f"amountOfSymmetry is supposed to be between 0 and 1, got {amountOfSymmetry}."
+    return (1 - amountOfSymmetry) * noiseProbs + amountOfSymmetry * SymmetrizeNoiseInPairs(noiseProbs)
