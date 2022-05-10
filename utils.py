@@ -101,6 +101,18 @@ def ContinuousSymmetryOfNoise(noiseProbs,amountOfSymmetry):
     assert 0 <= amountOfSymmetry <= 1, f"amountOfSymmetry is supposed to be between 0 and 1, got {amountOfSymmetry}."
     return (1 - amountOfSymmetry) * noiseProbs + amountOfSymmetry * SymmetrizeNoise(noiseProbs)
 
+def SymmetrizeNoiseInPairs(noiseProbs):
+    LESize = int(np.log2(noiseProbs.size)/2)
+    res = np.zeros_like(noiseProbs)
+    for i in range(noiseProbs.size):
+        twinI = LittleEndian(i & (2**LESize - 1),LESize // 2) + (LittleEndian(i >> LESize, LESize // 2) << LESize)
+        # print(f'i = {i}, twinI = {twinI}')
+        res[i] = noiseProbs[i] + noiseProbs[twinI]
+    return res
+
+x = np.arange(2**4)
+print(SymmetrizeNoiseInPairs(x))
+
 # a = np.array([1,2,3,4])
 # for x in np.arange(0,1.1,0.1):
 #     print(ContinuousSymmetryOfNoise(a,x))
