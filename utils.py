@@ -86,3 +86,15 @@ def EffectivenessOfConnecting(inputProbs,beta,numOfNeurons=4):
     optimalJCombined = JCombiner(optimalJFirst,optimalJSecond)
     MutinBoth = neuronsWithInputs.MutualInformationNeurons(optimalJCombined,beta=beta)
     return MaximalEntropyBoth - MutinBoth    
+
+def LittleEndian(num,size):
+    return (num >> size) + ((num & (2**size - 1))<<size)
+
+def SymmetrizeNoise(noiseProbs):
+    LESize = int(np.log2(noiseProbs.size)/2)
+    res = np.zeros(noiseProbs.size)
+    for i in range(noiseProbs.size):
+        res[i] = (noiseProbs[i] + noiseProbs[LittleEndian(i,LESize)]) / 2
+    return res
+
+print(SymmetrizeNoise(np.array([1,2,3,4])))
