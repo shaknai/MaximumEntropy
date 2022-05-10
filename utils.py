@@ -97,4 +97,10 @@ def SymmetrizeNoise(noiseProbs):
         res[i] = (noiseProbs[i] + noiseProbs[LittleEndian(i,LESize)]) / 2
     return res
 
-print(SymmetrizeNoise(np.array([1,2,3,4])))
+def ContinuousSymmetryOfNoise(noiseProbs,amountOfSymmetry):
+    assert 0 <= amountOfSymmetry <= 1, f"amountOfSymmetry is supposed to be between 0 and 1, got {amountOfSymmetry}."
+    return (1 - amountOfSymmetry) * noiseProbs + amountOfSymmetry * SymmetrizeNoise(noiseProbs)
+
+# a = np.array([1,2,3,4])
+# for x in np.arange(0,1.1,0.1):
+#     print(ContinuousSymmetryOfNoise(a,x))
