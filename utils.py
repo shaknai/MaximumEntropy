@@ -4,6 +4,14 @@ from Input import Inputs
 from NeuronsWithInputs import NeuronsWithInputs
 
 def NoCorrelationInputsBetweenPairs(covs):
+    """Create input with no mutual informatioin by taking a product of different binary distributions.
+
+    Args:
+        covs (List<float>): List of the covariances of the differen neurons.
+
+    Returns:
+        nparray : The probability distribution created from the unentangled inputs.
+    """
     probsOfEachPair = []
     amountOfPairs = len(covs)
     amountOfNeurons = amountOfPairs*2
@@ -29,13 +37,32 @@ def InputCombiner(firstPairProbs, relationToSecondPair, noiseInCorrelation = 0):
     return probOfBothInputs
 
 def InputSplitter(inputProbs,sizesOfSplits=[2,2]):
+    """Split input probability to different "independent" inputs by tracing over the others
+
+    Args:
+        inputProbs (nparray): The combined input probs
+        sizesOfSplits (list, optional): The size of the splits to make. Defaults to [2,2].
+
+    Returns:
+        List<nparray>: A list of the probability distributions for all the splits of neurons
+    """
     probsForEachSplit = [np.zeros(2**size) for size in sizesOfSplits]
     for input,inputProb in enumerate(inputProbs):
         for splitInd,splitSize in enumerate(sizesOfSplits):
             probsForEachSplit[splitInd][(input>>sum(sizesOfSplits[splitInd+1:])) & (2**splitSize - 1)] += inputProb
     return probsForEachSplit
 
-def MutualInformationOfInputs(inputProbs,sizesOfSplits=[2,2]):
+def MutualInformationOfInputs(inputProbs,sizesOfSplits=[2,2]) -> float:
+    """Mutual Information of two subgroups of the neuronal input.
+
+    Args:
+        inputProbs (nparray): The combined input probs
+        sizesOfSplits (list, optional): The amount of neurons in each subgroup. Defaults to [2,2].
+
+    Returns:
+        float: The mutual information between the two subgroups.
+    """
+    assert len(sizesOfSplits) == 2, f"Function expects 2 subgroups to split into, got {len(sizesOfSplits)} instead."
     probsForEachSplit = InputSplitter(inputProbs,sizesOfSplits)
     mutIn = 0
     for input,inputProb in enumerate(inputProbs):
