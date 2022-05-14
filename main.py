@@ -156,8 +156,6 @@ def mainDifferentNoise():
     plt.savefig(f'logs/{dirName}/Mutual_information_by_connecting_time_frames_different_noise.png')
     plt.show()
 
-
-
 def mainDependentInputs():
     # firstPairProbs = NoCorrelationInputsBetweenPairs([0.5])
     # relationToSecondPair = np.random.rand(firstPairProbs.size,firstPairProbs.size)
@@ -276,12 +274,55 @@ def mainSymmetryInPairsNoise():
     plt.savefig(f'logs/{dirName}/Mutual_information_by_connecting_time_frames_different_in_pair_symmetry_noise.png')
     plt.show()
 
+def mainSymmetryInAndBetweenPairsNoise():
+    dirName = f"{datetime.now().strftime('%d-%m-%Y_(%H:%M:%S)')}_different_symmetry_of_noise"
+    mkdir(f'logs/{dirName}')
+    beta = 1
+    cleanProbs = NoCorrelationInputsBetweenPairs([0.5,0.5])
+    amountsOfSymmetryInPair = np.arange(0,1.05,0.1)
+    amountsOfSymmetryBetweenPairs = np.arange(0,1.05,0.1)[:9]
+    
+    plt.figure()
+    plt.title(f'Effectiveness of Connecting Time Frames for different in-pair symmetry noise')
+    noisyProbs = np.random.rand(cleanProbs.size)
+    noisyProbs /= sum(noisyProbs)
+    fig,ax = plt.subplots(3,3)
+    for betweenPairEpoch,amountOfSymmetryBetweenPairs in enumerate(amountsOfSymmetryBetweenPairs):
+        print(f"Epoch {betweenPairEpoch+1} out of: {amountsOfSymmetryBetweenPairs.size}")
+        
+        noisyProbsAfterSymmetrizingBetweenPairs = ContinuousSymmetryOfNoise(noisyProbs,amountOfSymmetryBetweenPairs)
+        ax[betweenPairEpoch // 3, betweenPairEpoch % 3].set_title(amountOfSymmetryBetweenPairs)
+        for epoch,amountOfSymmetry in enumerate(amountsOfSymmetryInPair):
+            noisyProbsAfterSymmetrizing = ContinuousSymmetryInPairs(noisyProbsAfterSymmetrizingBetweenPairs,amountOfSymmetry)
+            noiseAmounts = np.arange(0.1,1,0.1) #Changed this to be far from zero mutin.
+            effectiveness = np.zeros(noiseAmounts.size)
+            print(f"Run {epoch+1} out of: {amountsOfSymmetryInPair.size}")
+            pbar = tqdm.tqdm(total= noiseAmounts.size)
+            mutinInputsList = np.zeros(len(noiseAmounts))
+            for i,noiseAmount in enumerate(noiseAmounts):
+                inputProbs = (1-noiseAmount)*cleanProbs + noiseAmount*noisyProbsAfterSymmetrizing
+                inputProbs /= sum(inputProbs)
+                mutinInputs = MutualInformationOfInputs(inputProbs)
+                mutinInputsList[i] = mutinInputs
+                effectiveness[i] = EffectivenessOfConnecting(inputProbs,beta)
+                pbar.update(1)
+            ax[betweenPairEpoch // 3, betweenPairEpoch % 3].plot(mutinInputsList,effectiveness/mutinInputsList,'o-')
+            pbar.close()
+    # ax.plot(ratios)
+            ax[betweenPairEpoch // 3, betweenPairEpoch % 3].legend(amountsOfSymmetryBetweenPairs)
+    # plt.xlabel('Mutual information of inputs')
+    # plt.ylabel('Effectivness of connecting pairs divided by Mutin of inputs')
+    plt.savefig(f'logs/{dirName}/Mutual_information_by_connecting_time_frames_different_in_pair_symmetry_noise.png')
+    plt.show()
+
+
 if __name__ == '__main__':
     # mainDependentInputs()
     # mainSimilarityOfInputs()
     # mainDependentInputsDifferentBetas()
     # mainSymmetricAndAntisymmetricNoise()
-    mainSymmetryInPairsNoise()
+    # mainSymmetryInPairsNoise()
+    mainSymmetryInAndBetweenPairsNoise()
     # mainDifferentInputSameBeta()
     # mainDifferentNoise()
     # checkingJCombiner()
