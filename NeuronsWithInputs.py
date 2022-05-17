@@ -80,7 +80,7 @@ class NeuronsWithInputs:
     def MinusMutualInformationNeurons(self,J):
         return -self.MutualInformationNeurons(J)
 
-    def FindOptimalJPatternSearch(self,beta,covariance=None,inputProbs=None):
+    def FindOptimalJPatternSearch(self,beta,covariance=None,inputProbs=None,x0 = None):
         if beta:
             self.neuronGroup.beta = beta
         if inputProbs:
@@ -88,7 +88,10 @@ class NeuronsWithInputs:
         if covariance:
             self.inputs.covariance = covariance
         problem = ElementWiseMinMutualInformation(self)
-        algorithm = PatternSearch()
+        if x0 is not None:
+            algorithm = PatternSearch(x0=x0,rho=0.1,init_delta=0.05) #init_delta=0.1 wasn't bad
+        else:
+            algorithm = PatternSearch()
         res = minimize(problem,algorithm,verbose=False,seed=1)
         return res.X, -res.F #Returns optimal J and maximal mutual information
 
