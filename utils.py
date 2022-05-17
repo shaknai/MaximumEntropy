@@ -1,4 +1,5 @@
 import enum
+from tokenize import group
 import numpy as np
 from Input import Inputs
 from NeuronsWithInputs import NeuronsWithInputs
@@ -69,8 +70,62 @@ def MutualInformationOfInputs(inputProbs,sizesOfSplits=[2,2]) -> float:
         multOfProbsOfSplits = 1
         for splitInd,splitSize in enumerate(sizesOfSplits):
             multOfProbsOfSplits *= probsForEachSplit[splitInd][(input>>sum(sizesOfSplits[splitInd+1:])) & (2**splitSize - 1)]
-        mutIn += inputProb * np.log(inputProb / multOfProbsOfSplits)
+        if multOfProbsOfSplits*inputProb != 0 :
+            mutIn += inputProb * np.log(inputProb / multOfProbsOfSplits)
     return mutIn
+
+def bitAtIndex(num,ind):
+    """Return specific bit in a binary representation of number
+
+    Args:
+        num (uint): The number.
+        ind (uint): The index of interest inside the number. (Zero based)
+
+    Returns:
+        [0,1]: The value of the bit.
+    """
+    return (num >> ind) & 1
+
+def MutualInformationBetweenAllInputs(inputProbs):
+    """Mutual information between all the single inputs.
+
+    Args:
+        inputProbs (nparray): The combined input probs
+
+    Returns:
+        ndarray(numOfNeurons,numOfNeurons): A matrix whose (i,j) element is the mutual information between the i'th and the j'th neuronal input.
+    """
+    amountOfNeurons = int(np.log2(len(inputProbs)))
+    mutIns = np.zeros((amountOfNeurons,amountOfNeurons))
+    for i in range(amountOfNeurons):
+        for j in range(i,amountOfNeurons):
+            reducedInputProbs = np.zeros(4)
+            for input,inputProb in enumerate(inputProbs):
+                reducedInputProbs[2*bitAtIndex(input,i) + bitAtIndex(input,j)] += inputProb
+            mutIns[i,j] = MutualInformationOfInputs(reducedInputProbs,sizesOfSplits=[1,1])
+            mutIns[j,i] = mutIns[i,j]
+    return mutIns
+
+def SumOfMutinsBetweenPairs(inputProbs,sizeOfSplits = [2,2]):
+    assert 2**sum(sizeOfSplits) == len(inputProbs), "The amount of neurons indicated by inputProbs isn't consistent with the sum of sizeOfSplits."
+    mutIns = MutualInformationBetweenAllInputs(inputProbs)
+    amountOfNeurons = mutIns.shape[0]
+    sumOfMutins = 0 #The value we want to calculate.
+    curNeuronInd = 0 #The index of the neuron on which we run
+    groupInd = 0 #The index of the group we are currently in
+    nextGroupNeuronInd = sizeOfSplits[groupInd] #Index in which next group starts
+    while nextGroupNeuronInd < amountOfNeurons:
+        for _ in range(sizeOfSplits[groupInd]): 
+            for j in range(nextGroupNeuronInd,amountOfNeurons):
+                sumOfMutins += mutIns[curNeuronInd,j]
+            curNeuronInd += 1
+        groupInd += 1
+        nextGroupNeuronInd += sizeOfSplits[groupInd]
+    return sumOfMutins
+
+# inputProbs = NoCorrelationInputsBetweenPairs([0,1])
+# print(MutualInformationBetweenAllInputs(inputProbs))
+# print(SumOfMutinsBetweenPairs(inputProbs))
 
 def JCombiner(*args):
     totalAmountOfNeurons = 0
@@ -100,19 +155,19 @@ def JCombiner(*args):
             totalInd += 1
     return totalJ
         
-def EffectivenessOfConnecting(inputProbs,beta,numOfNeurons=4):
+def EffectivenessOfConnecting(inputProbs,beta,numOfNeurons=4,lastOptimalJBoth = None, lastOptimalJFirst = None,lastOptimalJSecond = None):
     neuronsWithInputs = NeuronsWithInputs(numOfNeurons=numOfNeurons,inputProbs=inputProbs)
-    optimalJBoth,   MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta)
+    optimalJBoth,   MaximalEntropyBoth = neuronsWithInputs.FindOptimalJPatternSearch(beta=beta,x0 = lastOptimalJBoth)
 
     inputProbsFirstPair , inputProbsSecondPair = InputSplitter(inputProbs=inputProbs)
     neuronsWithInputsFirst = NeuronsWithInputs(numOfNeurons=2,inputProbs=inputProbsFirstPair)
     neuronsWithInputsSecond = NeuronsWithInputs(numOfNeurons=2,inputProbs=inputProbsSecondPair)
-    optimalJFirst,MaximalEntropyFirst = neuronsWithInputsFirst.FindOptimalJPatternSearch(beta=beta)
-    optimalJSecond,MaximalEntropySecond = neuronsWithInputsSecond.FindOptimalJPatternSearch(beta=beta)
+    optimalJFirst,MaximalEntropyFirst = neuronsWithInputsFirst.FindOptimalJPatternSearch(beta=beta,x0 = lastOptimalJFirst)
+    optimalJSecond,MaximalEntropySecond = neuronsWithInputsSecond.FindOptimalJPatternSearch(beta=beta, x0 = lastOptimalJSecond)
     
     optimalJCombined = JCombiner(optimalJFirst,optimalJSecond)
     MutinBoth = neuronsWithInputs.MutualInformationNeurons(optimalJCombined,beta=beta)
-    return MaximalEntropyBoth - MutinBoth    
+    return MaximalEntropyBoth - MutinBoth, optimalJFirst, optimalJSecond, optimalJBoth    
 
 def LittleEndian(num,size):
     return (num >> size) + ((num & (2**size - 1))<<size)
